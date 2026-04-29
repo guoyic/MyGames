@@ -1480,14 +1480,14 @@ canvas {
 @media (orientation: landscape) {
   .ios-hud {
     top: max(8px, env(safe-area-inset-top));
-    bottom: calc(max(112px, env(safe-area-inset-bottom)) + 10px);
+    bottom: auto;
     left: max(6px, env(safe-area-inset-left));
     right: auto;
-    width: clamp(70px, 9.5vw, 96px);
+    width: clamp(118px, 15vw, 150px);
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto auto;
     align-content: start;
-    gap: 7px;
+    gap: 5px;
     padding: 6px;
     background: rgba(5, 8, 14, 0.36);
   }
@@ -1508,12 +1508,12 @@ canvas {
   }
 
   .ios-hud .stats {
-    grid-template-columns: 1fr;
-    gap: 5px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .ios-hud .stats div {
-    padding: 4px;
+    padding: 3px 2px;
     text-align: center;
   }
 
@@ -1523,20 +1523,20 @@ canvas {
 
   .ios-hud .stats strong {
     margin-top: 1px;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .ios-hud .controls {
-    align-self: end;
+    align-self: start;
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 5px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .ios-hud .controls button {
     width: 100%;
-    min-height: 25px;
-    padding: 3px 4px;
+    min-height: 24px;
+    padding: 2px 3px;
     font-size: 10px;
   }
 
@@ -1578,19 +1578,19 @@ canvas {
     top: max(5px, env(safe-area-inset-top));
     left: max(8px, env(safe-area-inset-left));
     right: auto;
-    bottom: calc(max(96px, env(safe-area-inset-bottom)) + 8px);
-    width: clamp(64px, 8.5vw, 84px);
+    bottom: auto;
+    width: clamp(108px, 14vw, 132px);
     padding: 5px;
   }
 
   .ios-hud .stats div,
   .ios-hud .controls button {
-    padding: 3px 6px;
+    padding: 2px 3px;
   }
 
   .ios-hud .controls button {
-    min-height: 26px;
-    font-size: 11px;
+    min-height: 22px;
+    font-size: 10px;
   }
 
   .ios-app .ios-meters {
