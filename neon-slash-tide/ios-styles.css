@@ -1477,11 +1477,109 @@ canvas {
   }
 }
 
+@media (orientation: landscape) {
+  .ios-hud {
+    top: max(8px, env(safe-area-inset-top));
+    bottom: calc(max(112px, env(safe-area-inset-bottom)) + 10px);
+    left: max(6px, env(safe-area-inset-left));
+    right: auto;
+    width: clamp(70px, 9.5vw, 96px);
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    align-content: start;
+    gap: 7px;
+    padding: 6px;
+    background: rgba(5, 8, 14, 0.36);
+  }
+
+  .ios-brand {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    white-space: normal;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  .ios-brand .mark {
+    width: 22px;
+    height: 22px;
+  }
+
+  .ios-hud .stats {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .ios-hud .stats div {
+    padding: 4px;
+    text-align: center;
+  }
+
+  .ios-hud .stats span {
+    font-size: 9px;
+  }
+
+  .ios-hud .stats strong {
+    margin-top: 1px;
+    font-size: 13px;
+  }
+
+  .ios-hud .controls {
+    align-self: end;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .ios-hud .controls button {
+    width: 100%;
+    min-height: 25px;
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+
+  .ios-app .ios-meters {
+    top: max(8px, env(safe-area-inset-top));
+    bottom: calc(max(104px, env(safe-area-inset-bottom)) + 10px);
+    left: auto;
+    right: max(6px, env(safe-area-inset-right));
+    width: clamp(82px, 12vw, 118px);
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(5, 8, 14, 0.34);
+  }
+
+  .ios-app .ios-meters.duo-active {
+    grid-template-columns: 1fr;
+    align-content: start;
+  }
+
+  .ios-app .ios-meters span {
+    font-size: 9px;
+  }
+
+  .ios-app .ios-meters .bar {
+    height: 7px;
+    margin-top: 3px;
+  }
+
+  .ios-app .ios-meters .enhance-status strong {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+}
+
 @media (orientation: landscape) and (max-height: 460px) {
   .ios-hud {
     top: max(5px, env(safe-area-inset-top));
     left: max(8px, env(safe-area-inset-left));
-    right: max(8px, env(safe-area-inset-right));
+    right: auto;
+    bottom: calc(max(96px, env(safe-area-inset-bottom)) + 8px);
+    width: clamp(64px, 8.5vw, 84px);
     padding: 5px;
   }
 
@@ -1496,9 +1594,11 @@ canvas {
   }
 
   .ios-app .ios-meters {
-    top: calc(max(5px, env(safe-area-inset-top)) + 40px);
-    left: max(8px, env(safe-area-inset-left));
+    top: max(5px, env(safe-area-inset-top));
+    bottom: calc(max(88px, env(safe-area-inset-bottom)) + 8px);
+    left: auto;
     right: max(8px, env(safe-area-inset-right));
+    width: clamp(76px, 11vw, 104px);
     padding: 5px;
   }
 
