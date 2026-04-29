@@ -1,0 +1,11 @@
+{
+  "name": "霓虹斩潮",
+  "short_name": "霓虹斩潮",
+  "start_url": "./ios.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05070c",
+  "theme_color": "#05070c",
+  "description": "横屏触控版霓虹动作生存游戏。"
+}

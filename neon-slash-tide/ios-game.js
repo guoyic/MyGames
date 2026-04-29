@@ -702,13 +702,23 @@ async function toggleFullscreen() {
         fallbackFullscreen = true;
         document.documentElement.classList.add("app-fullscreen");
       }
+      requestLandscapeLock();
     }
   } catch {
     fallbackFullscreen = true;
     document.documentElement.classList.add("app-fullscreen");
+    requestLandscapeLock();
   } finally {
     updateFullscreenButton();
     resizeCanvas();
+  }
+}
+
+async function requestLandscapeLock() {
+  try {
+    if (screen.orientation?.lock) await screen.orientation.lock("landscape");
+  } catch {
+    // iOS may ignore orientation locking for browser-launched pages.
   }
 }
 
@@ -790,6 +800,7 @@ function startGame() {
     resumeGame();
     return;
   }
+  requestLandscapeLock();
   state = makeState();
   running = true;
   paused = false;

@@ -6,10 +6,19 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="霓虹斩潮" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="screen-orientation" content="landscape" />
+    <link rel="manifest" href="./ios-manifest.json" />
     <title>霓虹斩潮 iOS</title>
     <link rel="stylesheet" href="./ios-styles.css" />
   </head>
   <body class="ios-app">
+    <div class="rotate-lock" aria-hidden="true">
+      <div class="rotate-lock-card">
+        <span class="rotate-icon"></span>
+        <strong>请横屏游玩</strong>
+        <p>把 iPhone 横过来，摇杆和攻击按钮会自动展开。</p>
+      </div>
+    </div>
     <main class="shell">
       <section class="hud menu-hud" aria-label="游戏状态">
         <div class="brand">
