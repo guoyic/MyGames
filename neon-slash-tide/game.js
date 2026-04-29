@@ -56,11 +56,11 @@ const PERF = {
 };
 const BOSS_TYPES = [
   { type: "bossBlade", name: "折光武士", color: "#ff3f7f", accent: "#f8fbff", hp: 680, speed: 1.02, touch: 28, rank: 1 },
-  { type: "bossOrbit", name: "环星炮塔", color: "#18d7ff", accent: "#ffca3d", hp: 820, speed: 1, touch: 30, rank: 2 },
-  { type: "bossPrism", name: "棱镜女王", color: "#b87cff", accent: "#afff4a", hp: 980, speed: 1.04, touch: 32, rank: 3 },
-  { type: "bossWarden", name: "磁暴典狱长", color: "#afff4a", accent: "#18d7ff", hp: 1160, speed: 0.96, touch: 35, rank: 4 },
-  { type: "bossLotus", name: "赤莲机巧", color: "#ff6b3d", accent: "#ffca3d", hp: 1360, speed: 1.08, touch: 38, rank: 5 },
-  { type: "bossVoid", name: "虚空灯塔", color: "#7d7cff", accent: "#f8fbff", hp: 1600, speed: 1.14, touch: 42, rank: 6 },
+  { type: "bossOrbit", name: "环星炮塔", color: "#18d7ff", accent: "#ffca3d", hp: 880, speed: 1, touch: 30, rank: 2 },
+  { type: "bossPrism", name: "棱镜女王", color: "#b87cff", accent: "#afff4a", hp: 1100, speed: 1.04, touch: 32, rank: 3 },
+  { type: "bossWarden", name: "磁暴典狱长", color: "#afff4a", accent: "#18d7ff", hp: 1360, speed: 0.96, touch: 50, rank: 4 },
+  { type: "bossLotus", name: "赤莲机巧", color: "#ff6b3d", accent: "#ffca3d", hp: 1580, speed: 1.20, touch: 38, rank: 5 },
+  { type: "bossVoid", name: "虚空灯塔", color: "#7d7cff", accent: "#f8fbff", hp: 1800, speed: 1.16, touch: 42, rank: 6 },
 ];
 const CHARACTERS = {
   blade: {
@@ -76,16 +76,16 @@ const CHARACTERS = {
     hint: "远程射击 · 稳定风筝",
     color: "#afff4a",
     speed: 225,
-    dashCost: 30,
-    maxHp: 92,
+    dashCost: 33,
+    maxHp: 85,
   },
   nova: {
     name: "脉冲",
     hint: "范围冲击 · 高生命",
     color: "#ffca3d",
     speed: 205,
-    dashCost: 34,
-    maxHp: 125,
+    dashCost: 30,
+    maxHp: 130,
   },
 };
 const POWERUP_TYPES = [
@@ -167,7 +167,7 @@ const DIFFICULTIES = {
     spawnDelay: 1,
     enemySpeed: 1,
     bossSpeed: 1,
-    bossHp: 1.35,
+    bossHp: 2,
     openingEnemies: 4,
   },
 };
@@ -975,12 +975,12 @@ function spawnBoss(wave) {
     bossWave: wave,
     bossCycle: cycle,
     bossRank: template.rank,
-    attackScale: (1 + cycle * 0.67) * duoAttackScale(),
+    attackScale: (1 + cycle) * duoAttackScale(),
     r: 42 + template.rank * 3 + Math.min(14, cycle * 3),
-    hp: template.hp * (1 + cycle) * tune.bossHp * duoHpScale(),
+    hp: template.hp * (1 + 1.5 * cycle) * tune.bossHp * duoHpScale(),
     maxHp: 1,
     speed: (baseSpeeds[template.type] || 92) * template.speed * tune.bossSpeed,
-    touchDamage: template.touch * (1 + cycle * 0.67) * duoAttackScale(),
+    touchDamage: template.touch * (1 + cycle) * duoAttackScale(),
     shootTimer: 1.2,
     pulseTimer: 2.2,
     dashTimer: (template.type === "bossBlade" ? 1.8 : 3) / tune.bossSpeed,
@@ -1607,7 +1607,7 @@ function update(dt) {
 
   if (state.time >= state.nextPowerupAt) {
     spawnPowerup();
-    state.nextPowerupAt += 60;
+    state.nextPowerupAt += 120;
   }
 
   if (state.pendingBoss) {
