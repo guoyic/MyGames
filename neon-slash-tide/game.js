@@ -738,6 +738,8 @@ function makePlayer(character, index, x, y) {
     spinBurst: 0,
     spinShotTimer: 0,
     facing: -Math.PI / 2,
+    reviveAvailable: false,
+    reviveWave: null,
     dashTrail: [],
   };
 }
@@ -750,6 +752,9 @@ function makeState() {
         makePlayer(selectedCharacters[1] || "ranger", 1, WORLD.w / 2 + 58, WORLD.h / 2),
       ]
     : [makePlayer(selectedCharacters[0] || "blade", 0, WORLD.w / 2, WORLD.h / 2)];
+  if (mode === "duo") {
+    for (const player of players) player.reviveAvailable = true;
+  }
   return {
     mode,
     difficulty: selectedDifficulty,
@@ -1101,6 +1106,40 @@ function nearestEnemyTo(player) {
   return live.reduce((best, enemy) => (distSq(player, enemy) < distSq(player, best) ? enemy : best), live[0]);
 }
 
+function downPlayer(player) {
+  const p = player || state.player;
+  p.hp = 0;
+  p.vx = 0;
+  p.vy = 0;
+  p.dashTrail.length = 0;
+  if (state.mode === "duo" && p.reviveAvailable) {
+    p.reviveAvailable = false;
+    p.reviveWave = state.wave + 2;
+    addFloater(`${playerLabel(p)} 倒下 · 第 ${p.reviveWave} 波复活`, p.x, p.y - 46, "#ffca3d");
+  }
+  if (alivePlayers().length === 0) endGame();
+}
+
+function reviveReadyPlayers() {
+  if (state.mode !== "duo") return;
+  const anchor = alivePlayers()[0];
+  if (!anchor) return;
+  for (const player of state.players) {
+    if (player.hp > 0 || !player.reviveWave || state.wave < player.reviveWave) continue;
+    const hero = CHARACTERS[player.character] || CHARACTERS.blade;
+    const side = player.index === 0 ? -1 : 1;
+    player.hp = Math.max(1, hero.maxHp * 0.65);
+    player.energy = 100;
+    player.special = Math.min(player.special, 80);
+    player.invuln = 2.2;
+    player.x = clamp(anchor.x + side * 72, player.r + 10, WORLD.w - player.r - 10);
+    player.y = clamp(anchor.y + rand(-44, 44), player.r + 10, WORLD.h - player.r - 10);
+    player.reviveWave = null;
+    addFloater(`${playerLabel(player)} 复活`, player.x, player.y - 48, "#afff4a");
+    addSparks(player.x, player.y, 34, player.skin.attackColor || hero.color, 620);
+  }
+}
+
 function aimAngleFor(player) {
   if (state.mode === "duo" && (player.character === "blade" || player.character === "ranger")) {
     const target = nearestEnemyTo(player);
@@ -1396,8 +1435,7 @@ function damagePlayer(player, amount, x, y) {
   addSparks(p.x, p.y, 18, "#ff3f7f", 520);
   addFloater(`-${Math.ceil(taken)}`, p.x, p.y - 28, "#ff7aa8");
   if (p.hp <= 0) {
-    p.hp = 0;
-    if (alivePlayers().length === 0) endGame();
+    downPlayer(p);
   }
 }
 
@@ -1556,6 +1594,7 @@ function update(dt) {
 
   if (Math.floor(state.time / 22) + 1 > state.wave) {
     state.wave += 1;
+    reviveReadyPlayers();
     checkRunAchievements();
     addFloater(`第 ${state.wave} 波`, WORLD.w / 2, 90, "#18d7ff");
     const waveBurst = Math.max(1, Math.floor(Math.min(8, 2 + state.wave) * tune.enemyCap));

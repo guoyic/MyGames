@@ -1468,7 +1468,7 @@ function damagePlayer(player, amount, x, y) {
   addFloater(`-${Math.ceil(taken)}`, p.x, p.y - 28, "#ff7aa8");
   if (p.hp <= 0) {
     p.hp = 0;
-    if (alivePlayers().length === 0) endGame();
+    if (p.index === 0 || alivePlayers().length === 0) endGame();
   }
 }
 
