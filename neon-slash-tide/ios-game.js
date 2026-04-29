@@ -1151,6 +1151,12 @@ function shouldAiSpecial(player, target) {
   return target.isBoss || (state.enemies.length >= 6 && dist(player, target) < 210);
 }
 
+function attackEnergyCost(player) {
+  if (player.character === "ranger") return 15;
+  if (player.character === "nova") return 80;
+  return 0;
+}
+
 function updateAiPlayer(player, dt) {
   if (!player.ai || player.hp <= 0) return;
   player.aiThink = Math.max(0, player.aiThink - dt);
@@ -1162,7 +1168,7 @@ function updateAiPlayer(player, dt) {
 
   const d = dist(player, target);
   const attackRange = player.character === "ranger" ? 620 : player.character === "nova" ? 190 : 122;
-  if (d < attackRange) attack(player);
+  if (d < attackRange && player.energy >= attackEnergyCost(player) && Math.random() >= 0.25) attack(player);
   if (shouldAiSpecial(player, target)) special(player);
   if (player.dashCooldown <= 0 && player.energy > 45) {
     const dangerClose = d < (player.character === "ranger" ? 150 : 76);
@@ -1279,7 +1285,7 @@ function rangedAttack(player = state.player, power = 1) {
   const cost = 15;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
   if (p.energy < cost) {
-    addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
+    if (!p.ai) addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
     p.slashCooldown = 0.22;
     return;
   }
@@ -1307,7 +1313,7 @@ function pulseAttack(player = state.player, power = 1) {
   const cost = 80;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
   if (p.energy < cost) {
-    addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
+    if (!p.ai) addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
     p.slashCooldown = 0.34;
     return;
   }
