@@ -1554,8 +1554,11 @@ canvas {
   }
 
   .ios-app .ios-meters.duo-active {
-    grid-template-columns: 1fr;
+    bottom: auto;
+    width: clamp(154px, 22vw, 198px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
+    gap: 5px;
   }
 
   .ios-app .ios-meters span {
@@ -1600,6 +1603,13 @@ canvas {
     right: max(8px, env(safe-area-inset-right));
     width: clamp(76px, 11vw, 104px);
     padding: 5px;
+  }
+
+  .ios-app .ios-meters.duo-active {
+    bottom: auto;
+    width: clamp(142px, 21vw, 176px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .ios-touch-ui {
