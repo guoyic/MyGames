@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>霓虹斩潮</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hud" aria-label="游戏状态">
+        <div class="brand">
+          <span class="mark"></span>
+          <div>
+            <h1>霓虹斩潮</h1>
+            <p>冲刺、斩击、把整座街区点亮</p>
+          </div>
+        </div>
+        <div class="stats">
+          <div>
+            <span>分数</span>
+            <strong id="score">0</strong>
+          </div>
+          <div>
+            <span>波次</span>
+            <strong id="wave">1</strong>
+          </div>
+          <div>
+            <span>连击</span>
+            <strong id="combo">x1</strong>
+          </div>
+        </div>
+        <div class="controls" aria-label="游戏控制">
+          <button id="guideBtn" type="button">图鉴</button>
+          <button id="pauseBtn" type="button">暂停</button>
+          <button id="homeBtn" type="button">主页</button>
+          <button id="fullscreenBtn" type="button">进入全屏</button>
+        </div>
+      </section>
+
+      <section class="arena-wrap">
+        <canvas id="game" width="1280" height="720" aria-label="霓虹斩潮动作游戏画面"></canvas>
+        <div class="overlay" id="overlay">
+          <div class="overlay-panel">
+            <p class="kicker">NEON SLASH SURVIVAL</p>
+            <h2 id="overlayTitle">准备开斩</h2>
+            <p id="overlayText">先选单人/双人，再选角色与外观，最后选择难度。双人模式会自动瞄准最近敌人。</p>
+            <div class="mode-select" aria-label="模式选择">
+              <button class="mode-btn active" data-mode="solo" type="button">
+                <strong>单人</strong>
+                <span>经典操作 · 鼠标瞄准</span>
+              </button>
+              <button class="mode-btn" data-mode="duo" type="button">
+                <strong>双人</strong>
+                <span>同屏合作 · 自动瞄准</span>
+              </button>
+            </div>
+            <div class="player-slots hidden" id="playerSlots" aria-label="双人角色槽位">
+              <button class="slot-btn active" data-slot="0" type="button">玩家 1</button>
+              <button class="slot-btn" data-slot="1" type="button">玩家 2</button>
+            </div>
+            <div class="characters" aria-label="角色选择">
+              <button class="character-btn active" data-character="blade" type="button">
+                <strong>疾刃</strong>
+                <span>近战斩击 · 快速冲刺</span>
+              </button>
+              <button class="character-btn" data-character="ranger" type="button">
+                <strong>星弩</strong>
+                <span>远程射击 · 稳定风筝</span>
+              </button>
+              <button class="character-btn" data-character="nova" type="button">
+                <strong>脉冲</strong>
+                <span>范围冲击 · 高生命</span>
+              </button>
+            </div>
+            <div class="skin-choices" id="skinChoices" aria-label="外观选择"></div>
+            <div class="difficulty" aria-label="难度选择">
+              <button class="difficulty-btn active" data-difficulty="easy" type="button">
+                <strong>轻松</strong>
+                <span>更少敌人 · 更慢节奏</span>
+              </button>
+              <button class="difficulty-btn" data-difficulty="hard" type="button">
+                <strong>困难</strong>
+                <span>中等压力 · 更可控</span>
+              </button>
+              <button class="difficulty-btn" data-difficulty="hell" type="button">
+                <strong>地狱</strong>
+                <span>当前强度 · 满压迫</span>
+              </button>
+            </div>
+            <button id="startBtn" type="button">开始游戏</button>
+          </div>
+        </div>
+        <div class="touch-ui" aria-hidden="true">
+          <div class="stick" id="stick"><span></span></div>
+          <div class="touch-actions">
+            <button id="dashTouch" type="button">闪</button>
+            <button id="slashTouch" type="button">攻</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="meters" aria-label="玩家资源">
+        <div>
+          <span>生命</span>
+          <div class="bar"><i id="healthBar"></i></div>
+        </div>
+        <div>
+          <span>能量</span>
+          <div class="bar energy"><i id="energyBar"></i></div>
+        </div>
+        <div>
+          <span id="specialLabel">绝招 0/1</span>
+          <div class="bar special"><i id="specialBar"></i></div>
+        </div>
+        <div class="enhance-status">
+          <span id="enhanceLabel">增幅 0/2</span>
+          <strong id="enhanceEffect">疾刃 · 范围 +0</strong>
+        </div>
+        <div class="duo-meter hidden">
+          <span>生命 P2</span>
+          <div class="bar"><i id="healthBar2"></i></div>
+        </div>
+        <div class="duo-meter hidden">
+          <span>能量 P2</span>
+          <div class="bar energy"><i id="energyBar2"></i></div>
+        </div>
+        <div class="duo-meter hidden">
+          <span id="specialLabel2">绝招 P2 0/1</span>
+          <div class="bar special"><i id="specialBar2"></i></div>
+        </div>
+        <div class="enhance-status duo-meter hidden">
+          <span id="enhanceLabel2">增幅 P2 0/2</span>
+          <strong id="enhanceEffect2">星弩 · 弹数 +0</strong>
+        </div>
+      </section>
+
+      <section class="leaderboard" aria-label="本地排行榜">
+        <div class="leaderboard-head">
+          <h2>本地排行</h2>
+          <span>各模式 TOP 3</span>
+          <button id="resetLeaderboardBtn" type="button">清空</button>
+        </div>
+        <div id="leaderboardList" class="leaderboard-list"></div>
+      </section>
+    </main>
+
+    <div class="guide-modal hidden" id="guideModal" aria-hidden="true">
+      <section class="guide-panel" aria-label="图鉴说明">
+        <div class="guide-head">
+          <div>
+            <p class="kicker">CODEX</p>
+            <h2>图鉴</h2>
+          </div>
+          <div class="guide-actions">
+            <button id="resetProgressBtn" class="danger" type="button">重置进度</button>
+            <button id="guideCloseBtn" type="button">关闭</button>
+          </div>
+        </div>
+        <div class="guide-grid">
+          <article>
+            <h3>角色</h3>
+            <div class="guide-visuals">
+              <span class="sprite hero-sprite blade"></span>
+              <span class="sprite hero-sprite ranger"></span>
+              <span class="sprite hero-sprite nova"></span>
+            </div>
+            <p><b>疾刃</b> 高速近战，冲刺消耗更低，增幅扩大攻击范围。</p>
+            <p><b>星弩</b> 远程压制，移动稍慢，增幅让同时发射子弹 +1。</p>
+            <p><b>脉冲</b> 生命更高但移动更慢，增幅让范围伤害按初始伤害 +40% 叠加。</p>
+          </article>
+          <article>
+            <h3>Boss</h3>
+            <div class="guide-visuals">
+              <span class="sprite boss-icon bossBlade"></span>
+              <span class="sprite boss-icon bossOrbit"></span>
+              <span class="sprite boss-icon bossPrism"></span>
+              <span class="sprite boss-icon bossWarden"></span>
+              <span class="sprite boss-icon bossLotus"></span>
+              <span class="sprite boss-icon bossVoid"></span>
+            </div>
+            <p>每 5 波出现一个 Boss，登场前会有短暂预警。六个 Boss 会一个比一个强。</p>
+            <p>循环再次遇到同一 Boss 时，血量 +100% 初始血量，攻击 +67% 初始攻击。</p>
+          </article>
+          <article>
+            <h3>道具</h3>
+            <div class="guide-visuals">
+              <span class="sprite item-icon regen"></span>
+              <span class="sprite item-icon energy"></span>
+              <span class="sprite item-icon special"></span>
+              <span class="sprite item-icon enhance"></span>
+            </div>
+            <p>生命芯片每秒回血，涡轮电池加快能量回复，超载核心提升绝招上限。</p>
+            <p>角色增幅只由 Boss 掉落，轻松 80%，困难 50%，地狱 33%。上限：轻松/困难 3 层，地狱 4 层。</p>
+          </article>
+        </div>
+        <div id="guideProgress" class="guide-progress"></div>
+      </section>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
