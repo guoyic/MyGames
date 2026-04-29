@@ -175,7 +175,7 @@ const DIFFICULTIES = {
 const LEADERBOARD_KEY = "neonSlashTideLeaderboard";
 const keys = new Set();
 const pointer = { x: WORLD.w / 2, y: WORLD.h / 2, down: false };
-const touchMove = { x: 0, y: 0, active: false, id: null };
+const touchMove = { x: 0, y: 0, active: false, id: null, centerX: 0, centerY: 0 };
 const background = document.createElement("canvas");
 const bg = background.getContext("2d");
 const viewport = { scale: 1, x: 0, y: 0, w: WORLD.w, h: WORLD.h };
@@ -2375,10 +2375,17 @@ function bindInput() {
     pointer.x = pos.x;
     pointer.y = pos.y;
     pointer.down = true;
+    if (event.pointerType === "touch" && event.clientX < window.innerWidth * 0.5) {
+      startDynamicStick(event);
+    }
     if (running && event.pointerType !== "touch" && state.mode !== "duo") attack(state.players[0]);
   });
-  window.addEventListener("pointerup", () => {
+  window.addEventListener("pointermove", (event) => {
+    if (touchMove.id === event.pointerId) updateStick(event);
+  });
+  window.addEventListener("pointerup", (event) => {
     pointer.down = false;
+    resetStick(event);
   });
   ui.start.addEventListener("click", startGame);
   ui.pause.addEventListener("click", () => {
@@ -2416,17 +2423,7 @@ function bindInput() {
     button.addEventListener("click", () => setCharacter(button.dataset.character));
   }
 
-  ui.stick.addEventListener("pointerdown", (event) => {
-    touchMove.active = true;
-    touchMove.id = event.pointerId;
-    ui.stick.setPointerCapture(event.pointerId);
-    updateStick(event);
-  });
-  ui.stick.addEventListener("pointermove", (event) => {
-    if (touchMove.id === event.pointerId) updateStick(event);
-  });
-  ui.stick.addEventListener("pointerup", resetStick);
-  ui.stick.addEventListener("pointercancel", resetStick);
+  window.addEventListener("pointercancel", resetStick);
   ui.slashTouch.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     if (running) attack(state.players[0]);
@@ -2444,14 +2441,26 @@ function bindInput() {
   }, { passive: false });
 }
 
+function startDynamicStick(event) {
+  if (!running || touchMove.active) return;
+  event.preventDefault();
+  touchMove.active = true;
+  touchMove.id = event.pointerId;
+  touchMove.centerX = event.clientX;
+  touchMove.centerY = event.clientY;
+  ui.stick.classList.add("active");
+  ui.stick.style.setProperty("--stick-left", `${touchMove.centerX}px`);
+  ui.stick.style.setProperty("--stick-top", `${touchMove.centerY}px`);
+  canvas.setPointerCapture?.(event.pointerId);
+  updateStick(event);
+}
+
 function updateStick(event) {
-  const rect = ui.stick.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const dx = event.clientX - cx;
-  const dy = event.clientY - cy;
+  if (!touchMove.active) return;
+  const dx = event.clientX - touchMove.centerX;
+  const dy = event.clientY - touchMove.centerY;
   const mag = Math.hypot(dx, dy);
-  const max = 38;
+  const max = 44;
   const amt = Math.min(max, mag);
   const nx = mag > 0 ? dx / mag : 0;
   const ny = mag > 0 ? dy / mag : 0;
@@ -2463,10 +2472,20 @@ function updateStick(event) {
 
 function resetStick(event) {
   if (event && touchMove.id !== event.pointerId) return;
+  if (event && canvas.releasePointerCapture) {
+    try {
+      canvas.releasePointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+  }
   touchMove.active = false;
   touchMove.id = null;
   touchMove.x = 0;
   touchMove.y = 0;
+  touchMove.centerX = 0;
+  touchMove.centerY = 0;
+  ui.stick.classList.remove("active");
   ui.stick.style.setProperty("--stick-x", "0px");
   ui.stick.style.setProperty("--stick-y", "0px");
 }

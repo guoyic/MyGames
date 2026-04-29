@@ -1352,21 +1352,31 @@ canvas {
 }
 
 .ios-touch-ui {
-  inset: auto 0 0;
+  inset: 0;
   z-index: 7;
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
+  display: block;
   padding: 0 18px calc(max(18px, env(safe-area-inset-bottom)) + 4px);
   pointer-events: none;
 }
 
 .ios-touch-ui .stick {
+  position: absolute;
+  left: var(--stick-left, 84px);
+  top: var(--stick-top, 50%);
   width: 124px;
   height: 124px;
   border-width: 2px;
   background: rgba(248, 251, 255, 0.08);
   box-shadow: inset 0 0 24px rgba(24, 215, 255, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.9);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.ios-touch-ui .stick.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .ios-touch-ui .stick span {
@@ -1376,6 +1386,9 @@ canvas {
 }
 
 .ios-touch-ui .touch-actions {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 4px);
   display: grid;
   grid-template-columns: 58px 74px 96px;
   align-items: end;
@@ -1613,9 +1626,12 @@ canvas {
   }
 
   .ios-touch-ui {
-    padding-left: max(14px, env(safe-area-inset-left));
-    padding-right: max(14px, env(safe-area-inset-right));
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding: 0;
+  }
+
+  .ios-touch-ui .touch-actions {
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
   }
 
   .ios-touch-ui .stick {
