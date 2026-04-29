@@ -191,6 +191,7 @@ let selectedGameMode = "solo";
 let selectedPlayerSlot = 0;
 let selectedCharacters = ["blade", "ranger"];
 let fallbackFullscreen = false;
+let viewportResizeFrame = 0;
 
 const rand = (min, max) => min + Math.random() * (max - min);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -722,6 +723,20 @@ async function requestLandscapeLock() {
   }
 }
 
+function syncAppViewportSize() {
+  const vv = window.visualViewport;
+  const width = Math.max(1, Math.round(vv?.width || window.innerWidth || document.documentElement.clientWidth || WORLD.w));
+  const height = Math.max(1, Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight || WORLD.h));
+  document.documentElement.style.setProperty("--app-width", `${width}px`);
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+  if (viewportResizeFrame) cancelAnimationFrame(viewportResizeFrame);
+  viewportResizeFrame = requestAnimationFrame(() => {
+    viewportResizeFrame = 0;
+    resizeCanvas();
+    draw();
+  });
+}
+
 function makePlayer(character, index, x, y) {
   const hero = CHARACTERS[character] || CHARACTERS.blade;
   const skin = activeSkinForCharacter(character);
@@ -753,6 +768,7 @@ function makePlayer(character, index, x, y) {
     facing: -Math.PI / 2,
     dashTrail: [],
     aiThink: 0,
+    aiSpecialDelay: null,
   };
 }
 
@@ -868,9 +884,11 @@ function goHome() {
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
+  const cssWidth = rect.width || parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-width")) || window.innerWidth || WORLD.w;
+  const cssHeight = rect.height || parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-height")) || window.innerHeight || WORLD.h;
   const dpr = Math.min(window.devicePixelRatio || 1, PERF.dprCap);
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+  canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
   viewport.scale = Math.min(canvas.width / WORLD.w, canvas.height / WORLD.h);
   viewport.w = WORLD.w * viewport.scale;
   viewport.h = WORLD.h * viewport.scale;
@@ -1160,8 +1178,20 @@ function attackEnergyCost(player) {
 function updateAiPlayer(player, dt) {
   if (!player.ai || player.hp <= 0) return;
   player.aiThink = Math.max(0, player.aiThink - dt);
+  if (player.specialCharges > 0 && player.aiSpecialDelay === null) {
+    player.aiSpecialDelay = Math.floor(rand(0, 11));
+  } else if (player.specialCharges <= 0) {
+    player.aiSpecialDelay = null;
+  }
   const target = nearestEnemyTo(player);
   if (target) player.facing = angleTo(player, target);
+  if (player.aiSpecialDelay !== null) {
+    player.aiSpecialDelay = Math.max(0, player.aiSpecialDelay - dt);
+    if (player.aiSpecialDelay <= 0 && target) {
+      special(player);
+      player.aiSpecialDelay = player.specialCharges > 0 ? Math.floor(rand(0, 11)) : null;
+    }
+  }
   if (player.aiThink > 0) return;
   player.aiThink = rand(0.06, 0.16);
   if (!target) return;
@@ -1169,7 +1199,6 @@ function updateAiPlayer(player, dt) {
   const d = dist(player, target);
   const attackRange = player.character === "ranger" ? 620 : player.character === "nova" ? 190 : 122;
   if (d < attackRange && player.energy >= attackEnergyCost(player) && Math.random() >= 0.25) attack(player);
-  if (shouldAiSpecial(player, target)) special(player);
   if (player.dashCooldown <= 0 && player.energy > 45) {
     const dangerClose = d < (player.character === "ranger" ? 150 : 76);
     const chaseBoss = target.isBoss && d > attackRange * 0.9;
@@ -2496,9 +2525,20 @@ function resetStick(event) {
   ui.stick.style.setProperty("--stick-y", "0px");
 }
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", syncAppViewportSize);
+window.addEventListener("orientationchange", () => {
+  syncAppViewportSize();
+  setTimeout(syncAppViewportSize, 120);
+  setTimeout(syncAppViewportSize, 420);
+});
+window.addEventListener("pageshow", syncAppViewportSize);
+window.visualViewport?.addEventListener("resize", syncAppViewportSize);
+window.visualViewport?.addEventListener("scroll", syncAppViewportSize);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncAppViewportSize();
+});
 bindInput();
-resizeCanvas();
+syncAppViewportSize();
 syncSetupUi();
 state = makeState();
 updateFullscreenButton();
