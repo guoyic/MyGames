@@ -522,8 +522,80 @@ canvas {
   backdrop-filter: blur(12px);
 }
 
+.level-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3, 6, 12, 0.68);
+  backdrop-filter: blur(12px);
+}
+
 .guide-modal.hidden {
   display: none;
+}
+
+.level-modal.hidden {
+  display: none;
+}
+
+.level-panel {
+  width: min(560px, 100%);
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(7, 11, 20, 0.94);
+  text-align: center;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+}
+
+.level-panel h2 {
+  margin-top: 6px;
+  font-size: clamp(28px, 5vw, 46px);
+  line-height: 1;
+}
+
+.level-panel p:not(.kicker) {
+  margin: 10px auto 16px;
+  color: #d7e3f3;
+  line-height: 1.5;
+}
+
+.level-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.level-option {
+  min-height: 102px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  display: grid;
+  gap: 7px;
+  align-content: center;
+  text-align: left;
+}
+
+.level-option:hover,
+.level-option:focus-visible {
+  background: rgba(24, 215, 255, 0.14);
+  outline: none;
+}
+
+.level-option strong {
+  color: var(--lime);
+  font-size: 15px;
+}
+
+.level-option span {
+  color: #d7e3f3;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .guide-panel {
@@ -735,11 +807,22 @@ canvas {
   color: var(--lime);
 }
 
+.item-icon.healBurst {
+  color: #ff7aa8;
+}
+
 .item-icon.regen::before {
   border-radius: 50%;
   box-shadow:
     inset 0 8px 0 #041018,
     inset 8px 0 0 rgba(4, 16, 24, 0.7);
+}
+
+.item-icon.healBurst::before {
+  border-radius: 50%;
+  box-shadow:
+    inset 0 7px 0 #041018,
+    inset 7px 0 0 rgba(4, 16, 24, 0.7);
 }
 
 .item-icon.energy {
@@ -1156,6 +1239,18 @@ canvas {
 
   .guide-grid {
     grid-template-columns: 1fr;
+  }
+
+  .level-panel {
+    padding: 14px;
+  }
+
+  .level-options {
+    grid-template-columns: 1fr;
+  }
+
+  .level-option {
+    min-height: 70px;
   }
 
   .guide-progress {

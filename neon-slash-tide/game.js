@@ -23,6 +23,10 @@ const ui = {
   guideClose: document.querySelector("#guideCloseBtn"),
   guideProgress: document.querySelector("#guideProgress"),
   resetProgress: document.querySelector("#resetProgressBtn"),
+  levelModal: document.querySelector("#levelModal"),
+  levelTitle: document.querySelector("#levelTitle"),
+  levelText: document.querySelector("#levelText"),
+  levelOptions: document.querySelector("#levelOptions"),
   modeButtons: [...document.querySelectorAll(".mode-btn")],
   playerSlots: document.querySelector("#playerSlots"),
   slotButtons: [...document.querySelectorAll(".slot-btn")],
@@ -93,6 +97,7 @@ const POWERUP_TYPES = [
   { type: "energy", name: "涡轮电池", color: "#18d7ff", text: "能量回复 x2" },
   { type: "special", name: "超载核心", color: "#ffca3d", text: "绝招上限 +1" },
 ];
+const MINION_HEAL_DROP_RATE = 0.01;
 const ENHANCE_DROP_RATES = {
   easy: 0.8,
   hard: 0.5,
@@ -100,6 +105,7 @@ const ENHANCE_DROP_RATES = {
 };
 const MAX_ENHANCE_STACKS_BY_DIFFICULTY = { easy: 3, hard: 3, hell: 4 };
 const DUO_TUNING = { enemyHp: 1.5, enemyAttack: 1.2 };
+const MAX_RUN_LEVEL = 20;
 const PROGRESSION_KEY = "neonSlashTideProgression";
 const SKIN_UNLOCKS = {
   easy: {
@@ -197,6 +203,23 @@ const distSq = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const angleTo = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
 const lerp = (a, b, t) => a + (b - a) * t;
+
+function xpForNextLevel(level) {
+  if (level >= MAX_RUN_LEVEL) return Infinity;
+  return Math.round(20 + (level / (MAX_RUN_LEVEL - 1)) ** 1.35 * 60);
+}
+
+function attackUpgradeMultiplier(player) {
+  return 1 + (player?.upgrades?.attack || 0) * 0.08;
+}
+
+function speedUpgradeMultiplier(player) {
+  return 1 + (player?.upgrades?.speed || 0) * 0.035;
+}
+
+function specialUpgradeMultiplier(player) {
+  return 1 + (player?.upgrades?.special || 0) * 0.12;
+}
 
 function maxEnhanceStacks() {
   return MAX_ENHANCE_STACKS_BY_DIFFICULTY[state?.difficulty || selectedDifficulty] || 3;
@@ -516,6 +539,10 @@ function difficulty() {
   return DIFFICULTIES[state?.difficulty || selectedDifficulty] || DIFFICULTIES.easy;
 }
 
+function bossBlockingNextWave() {
+  return state.enemies.some((enemy) => enemy.isBoss && enemy.hp > 0 && enemy.hp / enemy.maxHp > 0.15);
+}
+
 function setDifficulty(mode) {
   if (!DIFFICULTIES[mode] || running || (paused && state && !state.gameOver)) return;
   selectedDifficulty = mode;
@@ -726,6 +753,10 @@ function makePlayer(character, index, x, y) {
     hp: hero.maxHp,
     maxHp: hero.maxHp,
     energy: 100,
+    level: 0,
+    xp: 0,
+    xpToNext: xpForNextLevel(0),
+    upgrades: { attack: 0, speed: 0, special: 0 },
     regenStacks: 0,
     energyStacks: 0,
     enhanceStacks: 0,
@@ -782,6 +813,10 @@ function makeState() {
     floaters: [],
     pendingBoss: null,
     bossWarning: null,
+    nextWaveAt: 22,
+    bossGateNotice: 0,
+    levelQueue: [],
+    levelChoiceOpen: false,
   };
 }
 
@@ -1041,12 +1076,33 @@ function spawnEnhancePowerup(x, y) {
   addFloater("角色增幅掉落", dropX, dropY - 42, "#f8fbff");
 }
 
+function spawnHealPowerup(x, y) {
+  const r = 21;
+  const dropX = clamp(x, r + 12, WORLD.w - r - 12);
+  const dropY = clamp(y, r + 12, WORLD.h - r - 12);
+  state.powerups.push({
+    type: "healBurst",
+    name: "急救晶体",
+    color: "#ff7aa8",
+    text: "生命 +50",
+    x: dropX,
+    y: dropY,
+    r,
+    life: 12,
+    maxLife: 12,
+    spin: rand(0, TAU),
+  });
+  addFloater("急救晶体掉落", dropX, dropY - 40, "#ff7aa8");
+}
+
 function collectPowerup(item, player = state.player) {
   const p = player;
   if (item.type === "regen") {
     p.regenStacks += 1;
   } else if (item.type === "energy") {
     p.energyStacks += 1;
+  } else if (item.type === "healBurst") {
+    p.hp = clamp(p.hp + 50, 0, p.maxHp);
   } else if (item.type === "enhance") {
     if (p.enhanceStacks >= maxEnhanceStacks()) {
       item.text = "增幅已满";
@@ -1065,6 +1121,98 @@ function collectPowerup(item, player = state.player) {
   addFloater(item.text, item.x, item.y - 28, item.color);
   addSparks(item.x, item.y, 26, item.color, 520);
   updateUi(true);
+}
+
+function queueLevelChoice(player) {
+  if (!state || !player || player.hp <= 0) return;
+  if (player.ai) {
+    const auto = ["attack", "speed", "special"][Math.floor(rand(0, 3))];
+    applyLevelUpgrade(player, auto, true);
+    return;
+  }
+  state.levelQueue.push(player);
+  showNextLevelChoice();
+}
+
+function levelUpPlayer(player) {
+  if (!player || player.level >= MAX_RUN_LEVEL) return false;
+  player.level += 1;
+  player.xp = 0;
+  player.xpToNext = xpForNextLevel(player.level);
+  addFloater(`${playerLabel(player) || "角色"} 升到 ${player.level} 级`, player.x, player.y - 68, "#ffca3d");
+  queueLevelChoice(player);
+  return true;
+}
+
+function grantPlayerXp(player, amount) {
+  if (!player || player.hp <= 0 || player.level >= MAX_RUN_LEVEL) return;
+  player.xp += amount;
+  while (player.level < MAX_RUN_LEVEL && player.xp >= player.xpToNext) {
+    player.xp -= player.xpToNext;
+    const leftover = player.xp;
+    levelUpPlayer(player);
+    player.xp = player.level >= MAX_RUN_LEVEL ? 0 : leftover;
+  }
+}
+
+function levelChoiceText(player, type) {
+  if (type === "attack") return "普通攻击伤害提升 8%。";
+  if (type === "speed") return "移动速度提升 3.5%。";
+  if (player.character === "blade") return "绝招伤害提升 12%，范围提升 8%。";
+  if (player.character === "ranger") return "绝招子弹伤害提升 12%，持续时间 +0.15 秒。";
+  return `绝招额外清场一次，第二次强度为首次的 ${player.level * 5}%。`;
+}
+
+function applyLevelUpgrade(player, type, silent = false) {
+  if (!player?.upgrades || !["attack", "speed", "special"].includes(type)) return;
+  player.upgrades[type] += 1;
+  if (!silent) addFloater("升级完成", player.x, player.y - 58, "#afff4a");
+  updateUi(true);
+}
+
+function showNextLevelChoice() {
+  if (!ui.levelModal || state.levelChoiceOpen || !state.levelQueue.length) return;
+  const player = state.levelQueue[0];
+  if (!player || player.hp <= 0) {
+    state.levelQueue.shift();
+    showNextLevelChoice();
+    return;
+  }
+  running = false;
+  paused = true;
+  state.levelChoiceOpen = true;
+  ui.levelTitle.textContent = `${playerLabel(player) || CHARACTERS[player.character].name} 升到 ${player.level} 级`;
+  ui.levelText.textContent = `选择一个本局强化。当前经验需求：${player.level >= MAX_RUN_LEVEL ? "已满级" : `${player.xp}/${player.xpToNext}`}`;
+  ui.levelOptions.replaceChildren();
+  for (const [type, title] of [["attack", "普通攻击增强"], ["speed", "移动速度变快"], ["special", "绝招增强"]]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "level-option";
+    button.innerHTML = `<strong>${title}</strong><span>${levelChoiceText(player, type)}</span>`;
+    button.addEventListener("click", () => chooseLevelUpgrade(type));
+    ui.levelOptions.append(button);
+  }
+  ui.levelModal.classList.remove("hidden");
+  ui.levelModal.setAttribute("aria-hidden", "false");
+}
+
+function chooseLevelUpgrade(type) {
+  if (!state?.levelChoiceOpen) return;
+  const player = state.levelQueue.shift();
+  applyLevelUpgrade(player, type);
+  state.levelChoiceOpen = false;
+  if (state.levelQueue.length) {
+    ui.levelModal.classList.add("hidden");
+    showNextLevelChoice();
+    return;
+  }
+  ui.levelModal.classList.add("hidden");
+  ui.levelModal.setAttribute("aria-hidden", "true");
+  if (!state.gameOver) {
+    paused = false;
+    running = true;
+    lastTime = performance.now();
+  }
 }
 
 function addSparks(x, y, amount, color, speed = 260) {
@@ -1204,7 +1352,7 @@ function slash(player = state.player, power = 1) {
   const rangeBoost = 1 + p.enhanceStacks * 0.18;
   const reach = (power > 1 ? 122 : 92) * rangeBoost;
   const arc = (power > 1 ? 1.58 : 1.18) + p.enhanceStacks * 0.08;
-  const damage = power > 1 ? 96 : 34;
+  const damage = (power > 1 ? 96 : 34) * attackUpgradeMultiplier(p);
   p.slashCooldown = power > 1 ? 0.36 : 0.2;
   p.facing = aimAngleFor(p);
   const slashColor = power > 1 ? "#ffca3d" : p.skin.attackColor || "#18d7ff";
@@ -1262,7 +1410,7 @@ function rangedAttack(player = state.player, power = 1) {
     const offset = (i - (shotCount - 1) / 2) * spread;
     firePlayerShot(p, p.facing + offset, {
       speed: power > 1 ? 660 : 590,
-      damage: power > 1 ? 34 : 27,
+      damage: (power > 1 ? 34 : 27) * attackUpgradeMultiplier(p),
       r: power > 1 ? 7 : 6,
       color: shotColor,
       pierce: power > 1 ? 1 : 0,
@@ -1284,7 +1432,7 @@ function pulseAttack(player = state.player, power = 1) {
   p.slashCooldown = power > 1 ? 0.55 : 0.42;
   const radius = power > 1 ? 235 : 170;
   const baseDamage = power > 1 ? 74 : 46;
-  const damage = baseDamage * (1 + p.enhanceStacks * 0.4);
+  const damage = baseDamage * (1 + p.enhanceStacks * 0.4) * attackUpgradeMultiplier(p);
   const pulseColor = p.skin.attackColor || "#ffca3d";
   state.slashes.push({ x: p.x, y: p.y, angle: 0, reach: radius, arc: Math.PI, life: 0.2, maxLife: 0.2, power: 4, color: pulseColor });
   addSparks(p.x, p.y, 24, pulseColor, 620);
@@ -1337,13 +1485,14 @@ function bladeSpecial(player = state.player) {
   p.invuln = Math.max(p.invuln, 0.55);
   state.shake = 18;
   state.hitStop = 0.08;
-  const rangeBoost = 1 + p.enhanceStacks * 0.18;
+  const rangeBoost = (1 + p.enhanceStacks * 0.18) * (1 + (p.upgrades.special || 0) * 0.08);
+  const specialDamage = 135 * specialUpgradeMultiplier(p);
   state.slashes.push({ x: p.x, y: p.y, angle: p.facing, reach: 190 * rangeBoost, arc: Math.PI, life: 0.22, maxLife: 0.22, power: 3, color: p.skin.attackColor || "#ffca3d" });
   for (const enemy of state.enemies) {
     const d = dist(p, enemy);
     if (d < 220 * rangeBoost) {
       const a = angleTo(p, enemy);
-      enemy.hp -= 135;
+      enemy.hp -= specialDamage;
       enemy.vx += Math.cos(a) * 700;
       enemy.vy += Math.sin(a) * 700;
       enemy.stun = 0.38;
@@ -1362,7 +1511,7 @@ function rangerSpecial(player = state.player) {
   if (p.specialCharges <= 0) return;
   p.specialCharges -= 1;
   if (p.special >= 100) p.special = 0;
-  p.spinBurst = 2;
+  p.spinBurst = 2 + (p.upgrades.special || 0) * 0.15;
   p.spinShotTimer = 0;
   p.invuln = Math.max(p.invuln, 0.8);
   state.shake = 12;
@@ -1380,15 +1529,28 @@ function novaSpecial(player = state.player) {
   state.hitStop = 0.1;
   state.slashes.push({ x: WORLD.w / 2, y: WORLD.h / 2, angle: 0, reach: WORLD.w, arc: Math.PI, life: 0.34, maxLife: 0.34, power: 5, color: p.skin.attackColor || "#ffca3d" });
   let hits = 0;
+  const firstClearDamage = new Map();
   for (const enemy of state.enemies) {
+    const beforeHp = enemy.hp;
     if (enemy.isBoss) {
       enemy.hp *= 0.85;
     } else {
       enemy.hp = Math.min(enemy.hp, enemy.maxHp * 0.01);
     }
+    firstClearDamage.set(enemy, Math.max(0, beforeHp - enemy.hp));
     enemy.flash = 0.26;
     enemy.stun = Math.max(enemy.stun, 0.35);
     hits += 1;
+  }
+  if ((p.upgrades.special || 0) > 0 && p.level > 0) {
+    const secondScale = p.level * 0.05;
+    state.slashes.push({ x: WORLD.w / 2, y: WORLD.h / 2, angle: 0, reach: WORLD.w, arc: Math.PI, life: 0.26, maxLife: 0.26, power: 5, color: p.skin.attackColor || "#7d7cff" });
+    for (const enemy of state.enemies) {
+      enemy.hp -= (firstClearDamage.get(enemy) || 0) * secondScale;
+      enemy.flash = 0.3;
+      enemy.stun = Math.max(enemy.stun, 0.4);
+    }
+    addFloater(`二次清场 ${Math.round(secondScale * 100)}%`, WORLD.w / 2, 154, "#7d7cff");
   }
   state.bullets.length = 0;
   addSparks(WORLD.w / 2, WORLD.h / 2, 70, "#ffca3d", 900);
@@ -1561,7 +1723,7 @@ function update(dt) {
         for (let i = 0; i < spinShotCount; i += 1) {
           firePlayerShot(p, base + (i / spinShotCount) * TAU, {
             speed: 640,
-            damage: 27,
+            damage: 27 * specialUpgradeMultiplier(p),
             r: 5,
             color: p.skin.attackColor || "#afff4a",
             life: 1.35,
@@ -1576,7 +1738,7 @@ function update(dt) {
     p.dashTrail = p.dashTrail.filter((t) => (t.life -= dt) > 0).slice(0, 10);
 
     const move = getMoveVector(p);
-    const speed = (CHARACTERS[p.character] || CHARACTERS.blade).speed;
+    const speed = (CHARACTERS[p.character] || CHARACTERS.blade).speed * speedUpgradeMultiplier(p);
     p.vx = lerp(p.vx, move.x * speed, 1 - Math.exp(-dt * 12));
     p.vy = lerp(p.vy, move.y * speed, 1 - Math.exp(-dt * 12));
     p.x = clamp(p.x + p.vx * dt, p.r + 10, WORLD.w - p.r - 10);
@@ -1592,8 +1754,17 @@ function update(dt) {
     state.spawnTimer = spawnCadence;
   }
 
-  if (Math.floor(state.time / 22) + 1 > state.wave) {
+  if (state.time >= state.nextWaveAt) {
+    if (bossBlockingNextWave()) {
+      state.nextWaveAt = state.time + 1;
+      state.bossGateNotice -= dt;
+      if (state.bossGateNotice <= 0) {
+        addFloater("Boss 血量降到 15% 以下才会进入下一波", WORLD.w / 2, 118, "#ffca3d");
+        state.bossGateNotice = 2.4;
+      }
+    } else {
     state.wave += 1;
+    state.nextWaveAt += 22;
     reviveReadyPlayers();
     checkRunAchievements();
     addFloater(`第 ${state.wave} 波`, WORLD.w / 2, 90, "#18d7ff");
@@ -1602,6 +1773,7 @@ function update(dt) {
     if (state.wave % 5 === 0 && !state.bossWaves.has(state.wave)) {
       state.bossWaves.add(state.wave);
       queueBossWarning(state.wave);
+    }
     }
   }
 
@@ -1734,9 +1906,13 @@ function update(dt) {
     state.score += gained;
     for (const player of alivePlayers()) addSpecial(player, enemy.isBoss ? 45 : 8);
     if (enemy.isBoss) {
+      for (const player of alivePlayers()) levelUpPlayer(player);
       recordBossKill(enemy.type);
       unlockBossSkin(enemy);
       if (Math.random() < (ENHANCE_DROP_RATES[state.difficulty] ?? ENHANCE_DROP_RATES.hell)) spawnEnhancePowerup(enemy.x, enemy.y);
+    } else {
+      for (const player of alivePlayers()) grantPlayerXp(player, 1);
+      if (Math.random() < MINION_HEAL_DROP_RATE) spawnHealPowerup(enemy.x, enemy.y);
     }
     addSparks(enemy.x, enemy.y, 18, enemy.type === "brute" ? "#ffca3d" : "#18d7ff", 580);
     addFloater(`+${gained}`, enemy.x, enemy.y - 20, "#f8fbff");
@@ -1776,13 +1952,13 @@ function updateUi(force = false) {
     energy: `${Math.round(p.energy)}%`,
     special: `${Math.round(p.special)}%`,
     specialLabel: `绝招 ${p.specialCharges}/${p.maxSpecialCharges}`,
-    enhanceLabel: `增幅 ${p.enhanceStacks}/${maxStacks}`,
+    enhanceLabel: `Lv ${p.level}/${MAX_RUN_LEVEL} · 增幅 ${p.enhanceStacks}/${maxStacks}`,
     enhanceEffect: enhancementStatusText(p),
     health2: p2 ? `${Math.round((p2.hp / p2.maxHp) * 100)}%` : "0%",
     energy2: p2 ? `${Math.round(p2.energy)}%` : "0%",
     special2: p2 ? `${Math.round(p2.special)}%` : "0%",
     specialLabel2: p2 ? `绝招 P2 ${p2.specialCharges}/${p2.maxSpecialCharges}` : "绝招 P2 0/1",
-    enhanceLabel2: p2 ? `增幅 P2 ${p2.enhanceStacks}/${maxStacks}` : `增幅 P2 0/${maxStacks}`,
+    enhanceLabel2: p2 ? `Lv ${p2.level}/${MAX_RUN_LEVEL} · 增幅 P2 ${p2.enhanceStacks}/${maxStacks}` : `Lv 0/${MAX_RUN_LEVEL} · 增幅 P2 0/${maxStacks}`,
     enhanceEffect2: p2 ? enhancementStatusText(p2) : "",
   };
   if (uiCache.score !== next.score) ui.score.textContent = next.score;
@@ -2149,7 +2325,7 @@ function drawPowerups() {
     ctx.fillStyle = item.color;
     ctx.strokeStyle = "#f8fbff";
     ctx.lineWidth = 3;
-    if (item.type === "regen") {
+    if (item.type === "regen" || item.type === "healBurst") {
       ctx.beginPath();
       ctx.arc(0, 0, item.r, 0, TAU);
       ctx.fill();

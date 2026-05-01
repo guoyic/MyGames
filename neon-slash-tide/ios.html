@@ -183,6 +183,15 @@
       </section>
     </main>
 
+    <div class="level-modal hidden" id="levelModal" aria-hidden="true">
+      <section class="level-panel" aria-label="角色升级">
+        <p class="kicker">LEVEL UP</p>
+        <h2 id="levelTitle">角色升级</h2>
+        <p id="levelText">选择一个本局强化。</p>
+        <div id="levelOptions" class="level-options"></div>
+      </section>
+    </div>
+
     <div class="guide-modal hidden" id="guideModal" aria-hidden="true">
       <section class="guide-panel" aria-label="图鉴说明">
         <div class="guide-head">
@@ -224,11 +233,12 @@
             <h3>道具</h3>
             <div class="guide-visuals">
               <span class="sprite item-icon regen"></span>
+              <span class="sprite item-icon healBurst"></span>
               <span class="sprite item-icon energy"></span>
               <span class="sprite item-icon special"></span>
               <span class="sprite item-icon enhance"></span>
             </div>
-            <p>生命芯片每秒回血，涡轮电池加快能量回复，超载核心提升绝招上限。</p>
+            <p>生命芯片每秒回血，急救晶体立即恢复 50 生命，涡轮电池加快能量回复，超载核心提升绝招上限。</p>
             <p>角色增幅只由 Boss 掉落，轻松 80%，困难 50%，地狱 33%。上限：轻松/困难 3 层，地狱 4 层。</p>
           </article>
         </div>
