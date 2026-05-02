@@ -29,6 +29,7 @@ const ui = {
   levelOptions: document.querySelector("#levelOptions"),
   modeButtons: [...document.querySelectorAll(".mode-btn")],
   playerSlots: document.querySelector("#playerSlots"),
+  aiToggle: document.querySelector("#p2AiToggle"),
   slotButtons: [...document.querySelectorAll(".slot-btn")],
   difficultyButtons: [...document.querySelectorAll(".difficulty-btn")],
   characterButtons: [...document.querySelectorAll(".character-btn")],
@@ -72,7 +73,7 @@ const CHARACTERS = {
     hint: "近战斩击 · 快速冲刺",
     color: "#18d7ff",
     speed: 270,
-    dashCost: 22,
+    dashCost: 15,
     maxHp: 100,
   },
   ranger: {
@@ -80,7 +81,7 @@ const CHARACTERS = {
     hint: "远程射击 · 稳定风筝",
     color: "#afff4a",
     speed: 225,
-    dashCost: 33,
+    dashCost: 22,
     maxHp: 85,
   },
   nova: {
@@ -88,7 +89,7 @@ const CHARACTERS = {
     hint: "范围冲击 · 高生命",
     color: "#ffca3d",
     speed: 205,
-    dashCost: 30,
+    dashCost: 20,
     maxHp: 130,
   },
 };
@@ -106,7 +107,7 @@ const ENHANCE_DROP_RATES = {
 };
 const MAX_ENHANCE_STACKS_BY_DIFFICULTY = { easy: 3, hard: 3, hell: 4, boss: 4 };
 const DUO_TUNING = { enemyHp: 1.5, enemyAttack: 1.2 };
-const MAX_RUN_LEVEL = 20;
+const MAX_RUN_LEVEL = 25;
 const PROGRESSION_KEY = "neonSlashTideProgression";
 const SKIN_UNLOCKS = {
   easy: {
@@ -213,6 +214,7 @@ let selectedDifficulty = "easy";
 let selectedGameMode = "solo";
 let selectedPlayerSlot = 0;
 let selectedCharacters = ["blade", "ranger"];
+let selectedPlayer2Ai = false;
 let fallbackFullscreen = false;
 
 const rand = (min, max) => min + Math.random() * (max - min);
@@ -634,11 +636,16 @@ function syncSetupUi() {
     button.classList.toggle("active", button.dataset.mode === selectedGameMode);
   }
   ui.playerSlots?.classList.toggle("hidden", selectedGameMode !== "duo");
+  ui.aiToggle?.classList.toggle("hidden", selectedGameMode !== "duo");
+  if (ui.aiToggle) {
+    ui.aiToggle.setAttribute("aria-pressed", String(selectedPlayer2Ai));
+    ui.aiToggle.textContent = `玩家 2 AI：${selectedPlayer2Ai ? "开启" : "关闭"}`;
+  }
   for (const button of ui.slotButtons) {
     const slot = Number(button.dataset.slot || 0);
     button.classList.toggle("active", slot === selectedPlayerSlot);
     const character = selectedCharacters[slot] || "blade";
-    button.textContent = `玩家 ${slot + 1} · ${CHARACTERS[character].name}`;
+    button.textContent = `${slot === 1 && selectedPlayer2Ai ? "AI 队友" : `玩家 ${slot + 1}`} · ${CHARACTERS[character].name}`;
   }
   for (const button of ui.characterButtons) {
     button.classList.toggle("active", button.dataset.character === selectedCharacter());
@@ -666,7 +673,7 @@ function renderSkinChoices() {
   ui.skinChoices.replaceChildren();
   const label = document.createElement("span");
   label.className = "skin-label";
-  label.textContent = selectedGameMode === "duo" ? `玩家 ${selectedPlayerSlot + 1} 外观` : "外观";
+  label.textContent = selectedGameMode === "duo" ? `${selectedPlayerSlot === 1 && selectedPlayer2Ai ? "AI 队友" : `玩家 ${selectedPlayerSlot + 1}`} 外观` : "外观";
   ui.skinChoices.append(label);
   for (const skin of availableSkinsForCharacter(character, progress)) {
     const button = document.createElement("button");
@@ -789,6 +796,7 @@ function makePlayer(character, index, x, y) {
   return {
     index,
     controlIndex: index,
+    ai: false,
     character,
     skin,
     x,
@@ -819,6 +827,8 @@ function makePlayer(character, index, x, y) {
     reviveAvailable: false,
     reviveWave: null,
     dashTrail: [],
+    aiThink: 0,
+    aiSpecialDelay: null,
   };
 }
 
@@ -832,6 +842,7 @@ function makeState() {
     : [makePlayer(selectedCharacters[0] || "blade", 0, WORLD.w / 2, WORLD.h / 2)];
   if (mode === "duo") {
     for (const player of players) player.reviveAvailable = true;
+    if (players[1]) players[1].ai = selectedPlayer2Ai;
   }
   return {
     mode,
@@ -1196,7 +1207,8 @@ function collectPowerup(item, player = state.player) {
 function queueLevelChoice(player) {
   if (!state || !player || player.hp <= 0) return;
   if (player.ai) {
-    const auto = ["attack", "speed", "special"][Math.floor(rand(0, 3))];
+    const choices = ["attack", "speed", ...(player.upgrades.special < 10 ? ["special"] : [])];
+    const auto = choices[Math.floor(rand(0, choices.length))];
     applyLevelUpgrade(player, auto, true);
     return;
   }
@@ -1228,13 +1240,17 @@ function grantPlayerXp(player, amount) {
 function levelChoiceText(player, type) {
   if (type === "attack") return "普通攻击伤害提升 8%。";
   if (type === "speed") return "移动速度提升 3.5%。";
-  if (player.character === "blade") return "绝招伤害提升 12%，范围提升 8%。";
-  if (player.character === "ranger") return "绝招子弹伤害提升 12%，持续时间 +0.15 秒。";
-  return `绝招额外清场一次，第二次强度为首次的 ${player.level * 5}%。`;
+  if (player.character === "blade") return "绝招伤害提升 12%，范围提升 8%。（最多 10 次）";
+  if (player.character === "ranger") return "绝招子弹伤害提升 12%，持续时间 +0.15 秒。（最多 10 次）";
+  return `绝招清场伤害 +5%，当前为 ${Math.round((0.5 + Math.min(10, player.upgrades.special) * 0.05) * 100)}%，最多 10 次后达到 100%。`;
 }
 
 function applyLevelUpgrade(player, type, silent = false) {
   if (!player?.upgrades || !["attack", "speed", "special"].includes(type)) return;
+  if (type === "special" && player.upgrades.special >= 10) {
+    if (!silent) addFloater("绝招已满级", player.x, player.y - 58, "#ffca3d");
+    return;
+  }
   player.upgrades[type] += 1;
   if (!silent) addFloater("升级完成", player.x, player.y - 58, "#afff4a");
   updateUi(true);
@@ -1258,7 +1274,9 @@ function showNextLevelChoice() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "level-option";
-    button.innerHTML = `<strong>${title}</strong><span>${levelChoiceText(player, type)}</span>`;
+    const capped = type === "special" && player.upgrades.special >= 10;
+    if (capped) button.disabled = true;
+    button.innerHTML = `<strong>${title}${capped ? "（已满）" : ""}</strong><span>${capped ? "绝招升级已达到 10 次上限。" : levelChoiceText(player, type)}</span>`;
     button.addEventListener("click", () => chooseLevelUpgrade(type));
     ui.levelOptions.append(button);
   }
@@ -1355,6 +1373,88 @@ function reviveReadyPlayers() {
     player.reviveWave = null;
     addFloater(`${playerLabel(player)} 复活`, player.x, player.y - 48, "#afff4a");
     addSparks(player.x, player.y, 34, player.skin.attackColor || hero.color, 620);
+  }
+}
+
+function aiMoveVector(player) {
+  const target = nearestEnemyTo(player);
+  if (!target) {
+    const leader = state.players[0];
+    if (!leader || leader === player) return { x: 0, y: 0, mag: 0 };
+    const dx = leader.x + 70 - player.x;
+    const dy = leader.y - player.y;
+    const mag = Math.hypot(dx, dy);
+    return mag > 16 ? { x: dx / mag, y: dy / mag, mag: 0.65 } : { x: 0, y: 0, mag: 0 };
+  }
+
+  const d = dist(player, target);
+  const desired = player.character === "ranger" ? 270 : player.character === "nova" ? 170 : 96;
+  if (d < desired * 0.7) {
+    const a = angleTo(target, player);
+    return { x: Math.cos(a), y: Math.sin(a), mag: 1 };
+  }
+  if (d > desired * 1.22) {
+    const a = angleTo(player, target);
+    return { x: Math.cos(a), y: Math.sin(a), mag: 1 };
+  }
+  const strafe = angleTo(player, target) + Math.PI / 2;
+  const drift = Math.sin(state.time * 1.7 + player.index) > 0 ? 1 : -1;
+  return { x: Math.cos(strafe) * drift, y: Math.sin(strafe) * drift, mag: 0.55 };
+}
+
+function attackEnergyCost(player) {
+  if (player.character === "ranger") return 15;
+  if (player.character === "nova") return isBossMode() ? 27 : 40;
+  return 0;
+}
+
+function aiBladeTuning(player) {
+  if (!player?.ai || player.character !== "blade") {
+    return { reach: 1, damage: 1, attackRange: 1, attackSkipChance: 0.25, thinkMin: 0.06, thinkMax: 0.16, dashEnergy: 38, dashDanger: 1, chaseBoss: true };
+  }
+  return {
+    reach: 1,
+    damage: 1,
+    attackRange: 1,
+    attackSkipChance: 0.48,
+    thinkMin: 0.12,
+    thinkMax: 0.27,
+    dashEnergy: 58,
+    dashDanger: 0.78,
+    chaseBoss: false,
+  };
+}
+
+function updateAiPlayer(player, dt) {
+  if (!player.ai || player.hp <= 0) return;
+  player.aiThink = Math.max(0, player.aiThink - dt);
+  if (player.specialCharges > 0 && player.aiSpecialDelay === null) {
+    player.aiSpecialDelay = Math.floor(rand(0, 11));
+  } else if (player.specialCharges <= 0) {
+    player.aiSpecialDelay = null;
+  }
+  const target = nearestEnemyTo(player);
+  if (target) player.facing = angleTo(player, target);
+  if (player.aiSpecialDelay !== null) {
+    player.aiSpecialDelay = Math.max(0, player.aiSpecialDelay - dt);
+    if (player.aiSpecialDelay <= 0 && target) {
+      special(player);
+      player.aiSpecialDelay = player.specialCharges > 0 ? Math.floor(rand(0, 11)) : null;
+    }
+  }
+  if (player.aiThink > 0) return;
+  const aiTuning = aiBladeTuning(player);
+  player.aiThink = rand(aiTuning.thinkMin, aiTuning.thinkMax);
+  if (!target) return;
+
+  const d = dist(player, target);
+  const baseAttackRange = player.character === "ranger" ? 620 : player.character === "nova" ? 190 : 122;
+  const attackRange = baseAttackRange * aiTuning.attackRange;
+  if (d < attackRange && player.energy >= attackEnergyCost(player) && Math.random() >= aiTuning.attackSkipChance) attack(player);
+  if (player.dashCooldown <= 0 && player.energy > aiTuning.dashEnergy) {
+    const dangerClose = d < (player.character === "ranger" ? 150 : 76) * aiTuning.dashDanger;
+    const chaseBoss = aiTuning.chaseBoss && target.isBoss && d > attackRange * 0.9;
+    if (dangerClose || chaseBoss) dash(player);
   }
 }
 
@@ -1467,10 +1567,11 @@ function slash(player = state.player, power = 1) {
   const p = player;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
 
+  const aiTuning = aiBladeTuning(p);
   const rangeBoost = (1 + p.enhanceStacks * 0.18) * bladeModeRangeMultiplier(p);
-  const reach = (power > 1 ? 122 : 92) * rangeBoost;
+  const reach = (power > 1 ? 122 : 92) * rangeBoost * aiTuning.reach;
   const arc = (power > 1 ? 1.58 : 1.18) + p.enhanceStacks * 0.08;
-  const damage = (power > 1 ? 96 : 34) * attackUpgradeMultiplier(p);
+  const damage = (power > 1 ? 96 : 34) * attackUpgradeMultiplier(p) * aiTuning.damage;
   p.slashCooldown = power > 1 ? 0.36 : 0.2;
   p.facing = aimAngleFor(p);
   const slashColor = power > 1 ? "#ffca3d" : p.skin.attackColor || "#18d7ff";
@@ -1543,7 +1644,7 @@ function rangedAttack(player = state.player, power = 1) {
 function pulseAttack(player = state.player, power = 1) {
   const p = player;
   const bossModeNormalAttack = power <= 1 && isBossMode();
-  const cost = bossModeNormalAttack ? 50 : 80;
+  const cost = bossModeNormalAttack ? 27 : 40;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
   if (p.energy < cost) {
     addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
@@ -1652,35 +1753,26 @@ function novaSpecial(player = state.player) {
   state.hitStop = 0.1;
   state.slashes.push({ x: WORLD.w / 2, y: WORLD.h / 2, angle: 0, reach: WORLD.w, arc: Math.PI, life: 0.34, maxLife: 0.34, power: 5, color: p.skin.attackColor || "#ffca3d" });
   let hits = 0;
-  const firstClearDamage = new Map();
+  const clearRatio = Math.min(1, 0.5 + Math.min(10, p.upgrades.special || 0) * 0.05);
   for (const enemy of state.enemies) {
-    const beforeHp = enemy.hp;
     if (enemy.isBoss) {
       enemy.hp *= 0.85;
     } else {
-      enemy.hp = Math.min(enemy.hp, enemy.maxHp * 0.01);
+      enemy.hp *= 1 - clearRatio;
+      if (clearRatio >= 1) enemy.hp = 0;
     }
-    firstClearDamage.set(enemy, Math.max(0, beforeHp - enemy.hp));
     enemy.flash = 0.26;
     enemy.stun = Math.max(enemy.stun, 0.35);
     hits += 1;
   }
-  if ((p.upgrades.special || 0) > 0 && p.level > 0) {
-    const secondScale = p.level * 0.05;
-    state.slashes.push({ x: WORLD.w / 2, y: WORLD.h / 2, angle: 0, reach: WORLD.w, arc: Math.PI, life: 0.26, maxLife: 0.26, power: 5, color: p.skin.attackColor || "#7d7cff" });
-    for (const enemy of state.enemies) {
-      enemy.hp -= (firstClearDamage.get(enemy) || 0) * secondScale;
-      enemy.flash = 0.3;
-      enemy.stun = Math.max(enemy.stun, 0.4);
-    }
-    addFloater(`二次清场 ${Math.round(secondScale * 100)}%`, WORLD.w / 2, 154, "#7d7cff");
-  }
+  addFloater(`清场伤害 ${Math.round(clearRatio * 100)}%`, WORLD.w / 2, 154, "#7d7cff");
   state.bullets.length = 0;
   addSparks(WORLD.w / 2, WORLD.h / 2, 70, "#ffca3d", 900);
   addFloater(`脉冲清场 x${hits}`, WORLD.w / 2, 112, "#ffca3d");
 }
 
 function getMoveVector(player = state.player) {
+  if (player?.ai) return aiMoveVector(player);
   let x = 0;
   let y = 0;
   const duo = state?.mode === "duo";
@@ -1857,6 +1949,7 @@ function update(dt) {
     }
     p.hp = clamp(p.hp + dt * p.regenStacks, 0, p.maxHp);
     p.energy = clamp(p.energy + dt * 18 * 2 ** p.energyStacks, 0, 100);
+    updateAiPlayer(p, dt);
     p.dashTrail.unshift({ x: p.x, y: p.y, life: 0.24 });
     p.dashTrail = p.dashTrail.filter((t) => (t.life -= dt) > 0).slice(0, 10);
 
@@ -2039,7 +2132,10 @@ function update(dt) {
     state.score += gained;
     for (const player of alivePlayers()) addSpecial(player, enemy.isBoss ? 45 : 8);
     if (enemy.isBoss) {
-      for (const player of alivePlayers()) levelUpPlayer(player);
+      for (const player of alivePlayers()) {
+        levelUpPlayer(player);
+        if (isBossMode()) player.hp = Math.max(player.hp, player.maxHp * 0.8);
+      }
       recordBossKill(enemy.type);
       unlockBossSkin(enemy);
       if (Math.random() < (ENHANCE_DROP_RATES[state.difficulty] ?? ENHANCE_DROP_RATES.hell)) spawnEnhancePowerup(enemy.x, enemy.y);
@@ -2090,8 +2186,8 @@ function updateUi(force = false) {
     health2: p2 ? `${Math.round((p2.hp / p2.maxHp) * 100)}%` : "0%",
     energy2: p2 ? `${Math.round(p2.energy)}%` : "0%",
     special2: p2 ? `${Math.round(p2.special)}%` : "0%",
-    specialLabel2: p2 ? `绝招 P2 ${p2.specialCharges}/${p2.maxSpecialCharges}` : "绝招 P2 0/1",
-    enhanceLabel2: p2 ? `Lv ${p2.level}/${MAX_RUN_LEVEL} · 增幅 P2 ${p2.enhanceStacks}/${maxStacks}` : `Lv 0/${MAX_RUN_LEVEL} · 增幅 P2 0/${maxStacks}`,
+    specialLabel2: p2 ? `绝招 ${p2.ai ? "AI" : "P2"} ${p2.specialCharges}/${p2.maxSpecialCharges}` : "绝招 P2 0/1",
+    enhanceLabel2: p2 ? `Lv ${p2.level}/${MAX_RUN_LEVEL} · 增幅 ${p2.ai ? "AI" : "P2"} ${p2.enhanceStacks}/${maxStacks}` : `Lv 0/${MAX_RUN_LEVEL} · 增幅 P2 0/${maxStacks}`,
     enhanceEffect2: p2 ? enhancementStatusText(p2) : "",
   };
   if (uiCache.score !== next.score) ui.score.textContent = next.score;
@@ -2664,7 +2760,10 @@ function bindInput() {
     }
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
       event.preventDefault();
-      if (running) dash(event.code === "ShiftRight" && state.mode === "duo" ? state.players[1] : state.players[0]);
+      if (running) {
+        const target = event.code === "ShiftRight" && state.mode === "duo" && !state.players[1]?.ai ? state.players[1] : state.players[0];
+        dash(target);
+      }
     }
     if (event.code === "KeyE") {
       event.preventDefault();
@@ -2731,6 +2830,24 @@ function bindInput() {
   for (const button of ui.modeButtons) {
     button.addEventListener("click", () => setGameMode(button.dataset.mode));
   }
+  const togglePlayer2Ai = () => {
+    if (running || (paused && state && !state.gameOver)) return;
+    selectedPlayer2Ai = !selectedPlayer2Ai;
+    syncSetupUi();
+    renderSkinChoices();
+    if (state && !running && !paused && !state.gameOver) {
+      state = makeState();
+      updateUi(true);
+      draw();
+    }
+  };
+  ui.aiToggle?.addEventListener("click", togglePlayer2Ai);
+  ui.aiToggle?.addEventListener("keydown", (event) => {
+    if (event.code === "Enter" || event.code === "Space") {
+      event.preventDefault();
+      togglePlayer2Ai();
+    }
+  });
   for (const button of ui.slotButtons) {
     button.addEventListener("click", () => setPlayerSlot(Number(button.dataset.slot || 0)));
   }

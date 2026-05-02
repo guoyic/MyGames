@@ -44,7 +44,7 @@
           <div class="overlay-panel">
             <p class="kicker">NEON SLASH SURVIVAL</p>
             <h2 id="overlayTitle">准备开斩</h2>
-            <p id="overlayText">先选单人/双人，再选角色与外观，最后选择难度。双人模式会自动瞄准最近敌人。</p>
+            <p id="overlayText">先选单人/双人，再选角色与外观，最后选择难度。双人模式可选择玩家 2 手动操作或交给 AI 队友。</p>
             <div class="mode-select" aria-label="模式选择">
               <button class="mode-btn active" data-mode="solo" type="button">
                 <strong>单人</strong>
@@ -54,6 +54,9 @@
                 <strong>双人</strong>
                 <span>同屏合作 · 自动瞄准</span>
               </button>
+            </div>
+            <div class="duo-options hidden" id="p2AiToggle" role="button" tabindex="0" aria-pressed="false">
+              玩家 2 AI：关闭
             </div>
             <div class="player-slots hidden" id="playerSlots" aria-label="双人角色槽位">
               <button class="slot-btn active" data-slot="0" type="button">玩家 1</button>

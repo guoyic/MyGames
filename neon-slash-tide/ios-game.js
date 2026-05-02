@@ -73,7 +73,7 @@ const CHARACTERS = {
     hint: "近战斩击 · 快速冲刺",
     color: "#18d7ff",
     speed: 270,
-    dashCost: 22,
+    dashCost: 15,
     maxHp: 100,
   },
   ranger: {
@@ -81,7 +81,7 @@ const CHARACTERS = {
     hint: "远程射击 · 稳定风筝",
     color: "#afff4a",
     speed: 225,
-    dashCost: 33,
+    dashCost: 22,
     maxHp: 85,
   },
   nova: {
@@ -89,7 +89,7 @@ const CHARACTERS = {
     hint: "范围冲击 · 高生命",
     color: "#ffca3d",
     speed: 205,
-    dashCost: 30,
+    dashCost: 20,
     maxHp: 130,
   },
 };
@@ -107,7 +107,7 @@ const ENHANCE_DROP_RATES = {
 };
 const MAX_ENHANCE_STACKS_BY_DIFFICULTY = { easy: 3, hard: 3, hell: 4, boss: 4 };
 const DUO_TUNING = { enemyHp: 1.5, enemyAttack: 1.2 };
-const MAX_RUN_LEVEL = 20;
+const MAX_RUN_LEVEL = 25;
 const PROGRESSION_KEY = "neonSlashTideProgression";
 const SKIN_UNLOCKS = {
   easy: {
@@ -1225,7 +1225,8 @@ function collectPowerup(item, player = state.player) {
 function queueLevelChoice(player) {
   if (!state || !player || player.hp <= 0) return;
   if (player.ai) {
-    const auto = ["attack", "speed", "special"][Math.floor(rand(0, 3))];
+    const choices = ["attack", "speed", ...(player.upgrades.special < 10 ? ["special"] : [])];
+    const auto = choices[Math.floor(rand(0, choices.length))];
     applyLevelUpgrade(player, auto, true);
     return;
   }
@@ -1257,13 +1258,17 @@ function grantPlayerXp(player, amount) {
 function levelChoiceText(player, type) {
   if (type === "attack") return "普通攻击伤害提升 8%。";
   if (type === "speed") return "移动速度提升 3.5%。";
-  if (player.character === "blade") return "绝招伤害提升 12%，范围提升 8%。";
-  if (player.character === "ranger") return "绝招子弹伤害提升 12%，持续时间 +0.15 秒。";
-  return `绝招额外清场一次，第二次强度为首次的 ${player.level * 5}%。`;
+  if (player.character === "blade") return "绝招伤害提升 12%，范围提升 8%。（最多 10 次）";
+  if (player.character === "ranger") return "绝招子弹伤害提升 12%，持续时间 +0.15 秒。（最多 10 次）";
+  return `绝招清场伤害 +5%，当前为 ${Math.round((0.5 + Math.min(10, player.upgrades.special) * 0.05) * 100)}%，最多 10 次后达到 100%。`;
 }
 
 function applyLevelUpgrade(player, type, silent = false) {
   if (!player?.upgrades || !["attack", "speed", "special"].includes(type)) return;
+  if (type === "special" && player.upgrades.special >= 10) {
+    if (!silent) addFloater("绝招已满级", player.x, player.y - 58, "#ffca3d");
+    return;
+  }
   player.upgrades[type] += 1;
   if (!silent) addFloater("升级完成", player.x, player.y - 58, "#afff4a");
   updateUi(true);
@@ -1287,7 +1292,9 @@ function showNextLevelChoice() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "level-option";
-    button.innerHTML = `<strong>${title}</strong><span>${levelChoiceText(player, type)}</span>`;
+    const capped = type === "special" && player.upgrades.special >= 10;
+    if (capped) button.disabled = true;
+    button.innerHTML = `<strong>${title}${capped ? "（已满）" : ""}</strong><span>${capped ? "绝招升级已达到 10 次上限。" : levelChoiceText(player, type)}</span>`;
     button.addEventListener("click", () => chooseLevelUpgrade(type));
     ui.levelOptions.append(button);
   }
@@ -1389,8 +1396,25 @@ function shouldAiSpecial(player, target) {
 
 function attackEnergyCost(player) {
   if (player.character === "ranger") return 15;
-  if (player.character === "nova") return 80;
+  if (player.character === "nova") return isBossMode() ? 27 : 40;
   return 0;
+}
+
+function aiBladeTuning(player) {
+  if (!player?.ai || player.character !== "blade") {
+    return { reach: 1, damage: 1, attackRange: 1, attackSkipChance: 0.25, thinkMin: 0.06, thinkMax: 0.16, dashEnergy: 45, dashDanger: 1, chaseBoss: true };
+  }
+  return {
+    reach: 1,
+    damage: 1,
+    attackRange: 1,
+    attackSkipChance: 0.48,
+    thinkMin: 0.12,
+    thinkMax: 0.27,
+    dashEnergy: 58,
+    dashDanger: 0.78,
+    chaseBoss: false,
+  };
 }
 
 function updateAiPlayer(player, dt) {
@@ -1411,15 +1435,17 @@ function updateAiPlayer(player, dt) {
     }
   }
   if (player.aiThink > 0) return;
-  player.aiThink = rand(0.06, 0.16);
+  const aiTuning = aiBladeTuning(player);
+  player.aiThink = rand(aiTuning.thinkMin, aiTuning.thinkMax);
   if (!target) return;
 
   const d = dist(player, target);
-  const attackRange = player.character === "ranger" ? 620 : player.character === "nova" ? 190 : 122;
-  if (d < attackRange && player.energy >= attackEnergyCost(player) && Math.random() >= 0.25) attack(player);
-  if (player.dashCooldown <= 0 && player.energy > 45) {
-    const dangerClose = d < (player.character === "ranger" ? 150 : 76);
-    const chaseBoss = target.isBoss && d > attackRange * 0.9;
+  const baseAttackRange = player.character === "ranger" ? 620 : player.character === "nova" ? 190 : 122;
+  const attackRange = baseAttackRange * aiTuning.attackRange;
+  if (d < attackRange && player.energy >= attackEnergyCost(player) && Math.random() >= aiTuning.attackSkipChance) attack(player);
+  if (player.dashCooldown <= 0 && player.energy > aiTuning.dashEnergy) {
+    const dangerClose = d < (player.character === "ranger" ? 150 : 76) * aiTuning.dashDanger;
+    const chaseBoss = aiTuning.chaseBoss && target.isBoss && d > attackRange * 0.9;
     if (dangerClose || chaseBoss) dash(player);
   }
 }
@@ -1533,10 +1559,11 @@ function slash(player = state.player, power = 1) {
   const p = player;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
 
+  const aiTuning = aiBladeTuning(p);
   const rangeBoost = (1 + p.enhanceStacks * 0.18) * bladeModeRangeMultiplier(p);
-  const reach = (power > 1 ? 122 : 92) * rangeBoost;
+  const reach = (power > 1 ? 122 : 92) * rangeBoost * aiTuning.reach;
   const arc = (power > 1 ? 1.58 : 1.18) + p.enhanceStacks * 0.08;
-  const damage = (power > 1 ? 96 : 34) * attackUpgradeMultiplier(p);
+  const damage = (power > 1 ? 96 : 34) * attackUpgradeMultiplier(p) * aiTuning.damage;
   p.slashCooldown = power > 1 ? 0.36 : 0.2;
   p.facing = aimAngleFor(p);
   const slashColor = power > 1 ? "#ffca3d" : p.skin.attackColor || "#18d7ff";
@@ -1609,7 +1636,7 @@ function rangedAttack(player = state.player, power = 1) {
 function pulseAttack(player = state.player, power = 1) {
   const p = player;
   const bossModeNormalAttack = power <= 1 && isBossMode();
-  const cost = bossModeNormalAttack ? 50 : 80;
+  const cost = bossModeNormalAttack ? 27 : 40;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
   if (p.energy < cost) {
     if (!p.ai) addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
@@ -1718,29 +1745,19 @@ function novaSpecial(player = state.player) {
   state.hitStop = 0.1;
   state.slashes.push({ x: WORLD.w / 2, y: WORLD.h / 2, angle: 0, reach: WORLD.w, arc: Math.PI, life: 0.34, maxLife: 0.34, power: 5, color: p.skin.attackColor || "#ffca3d" });
   let hits = 0;
-  const firstClearDamage = new Map();
+  const clearRatio = Math.min(1, 0.5 + Math.min(10, p.upgrades.special || 0) * 0.05);
   for (const enemy of state.enemies) {
-    const beforeHp = enemy.hp;
     if (enemy.isBoss) {
       enemy.hp *= 0.85;
     } else {
-      enemy.hp = Math.min(enemy.hp, enemy.maxHp * 0.01);
+      enemy.hp *= 1 - clearRatio;
+      if (clearRatio >= 1) enemy.hp = 0;
     }
-    firstClearDamage.set(enemy, Math.max(0, beforeHp - enemy.hp));
     enemy.flash = 0.26;
     enemy.stun = Math.max(enemy.stun, 0.35);
     hits += 1;
   }
-  if ((p.upgrades.special || 0) > 0 && p.level > 0) {
-    const secondScale = p.level * 0.05;
-    state.slashes.push({ x: WORLD.w / 2, y: WORLD.h / 2, angle: 0, reach: WORLD.w, arc: Math.PI, life: 0.26, maxLife: 0.26, power: 5, color: p.skin.attackColor || "#7d7cff" });
-    for (const enemy of state.enemies) {
-      enemy.hp -= (firstClearDamage.get(enemy) || 0) * secondScale;
-      enemy.flash = 0.3;
-      enemy.stun = Math.max(enemy.stun, 0.4);
-    }
-    addFloater(`二次清场 ${Math.round(secondScale * 100)}%`, WORLD.w / 2, 154, "#7d7cff");
-  }
+  addFloater(`清场伤害 ${Math.round(clearRatio * 100)}%`, WORLD.w / 2, 154, "#7d7cff");
   state.bullets.length = 0;
   addSparks(WORLD.w / 2, WORLD.h / 2, 70, "#ffca3d", 900);
   addFloater(`脉冲清场 x${hits}`, WORLD.w / 2, 112, "#ffca3d");
@@ -2107,7 +2124,10 @@ function update(dt) {
     state.score += gained;
     for (const player of alivePlayers()) addSpecial(player, enemy.isBoss ? 45 : 8);
     if (enemy.isBoss) {
-      for (const player of alivePlayers()) levelUpPlayer(player);
+      for (const player of alivePlayers()) {
+        levelUpPlayer(player);
+        if (isBossMode()) player.hp = Math.max(player.hp, player.maxHp * 0.8);
+      }
       recordBossKill(enemy.type);
       unlockBossSkin(enemy);
       if (Math.random() < (ENHANCE_DROP_RATES[state.difficulty] ?? ENHANCE_DROP_RATES.hell)) spawnEnhancePowerup(enemy.x, enemy.y);

@@ -282,8 +282,31 @@ canvas {
   margin-bottom: 10px;
 }
 
-.player-slots {
+.duo-options {
+  width: fit-content;
   margin: -8px auto 12px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #d7e3f3;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.duo-options[aria-pressed="true"] {
+  border-color: rgba(175, 255, 74, 0.72);
+  background: rgba(175, 255, 74, 0.13);
+  color: var(--ink);
+}
+
+.duo-options.hidden {
+  display: none;
+}
+
+.player-slots {
+  margin: -4px auto 12px;
   display: inline-flex;
   gap: 8px;
 }
@@ -612,6 +635,11 @@ canvas {
   gap: 7px;
   align-content: center;
   text-align: left;
+}
+
+.level-option:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .level-option:hover,
