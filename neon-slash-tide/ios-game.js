@@ -103,8 +103,9 @@ const ENHANCE_DROP_RATES = {
   easy: 0.8,
   hard: 0.5,
   hell: 0.33,
+  boss: 0.45,
 };
-const MAX_ENHANCE_STACKS_BY_DIFFICULTY = { easy: 3, hard: 3, hell: 4 };
+const MAX_ENHANCE_STACKS_BY_DIFFICULTY = { easy: 3, hard: 3, hell: 4, boss: 4 };
 const DUO_TUNING = { enemyHp: 1.5, enemyAttack: 1.2 };
 const MAX_RUN_LEVEL = 20;
 const PROGRESSION_KEY = "neonSlashTideProgression";
@@ -133,8 +134,16 @@ const SKIN_UNLOCKS = {
     ranger: { name: "深霓星弩", color: "#ff3f7f", attackColor: "#ffca3d" },
     nova: { name: "深霓脉冲", color: "#f8fbff", attackColor: "#7d7cff" },
   },
+  boss: {
+    wave: 50,
+    tier: 4,
+    label: "王冕",
+    blade: { name: "王冕疾刃", color: "#f8fbff", attackColor: "#ff3f7f" },
+    ranger: { name: "王冕星弩", color: "#18d7ff", attackColor: "#f8fbff" },
+    nova: { name: "王冕脉冲", color: "#ffca3d", attackColor: "#b87cff" },
+  },
 };
-const SKIN_MODE_ORDER = ["hell", "hard", "easy"];
+const SKIN_MODE_ORDER = ["boss", "hell", "hard", "easy"];
 const BOSS_BADGE_THRESHOLDS = [1, 3, 7, 12];
 const BOSS_BADGE_NAMES = ["未获得", "铜", "银", "金", "极光"];
 const ACHIEVEMENTS = [
@@ -177,6 +186,15 @@ const DIFFICULTIES = {
     bossHp: 2,
     openingEnemies: 4,
   },
+  boss: {
+    name: "Boss",
+    enemyCap: 0,
+    spawnDelay: 999,
+    enemySpeed: 0,
+    bossSpeed: 1.05,
+    bossHp: 1.15,
+    openingEnemies: 0,
+  },
 };
 const LEADERBOARD_KEY = "neonSlashTideLeaderboard";
 const keys = new Set();
@@ -200,6 +218,7 @@ let fallbackFullscreen = false;
 let viewportResizeFrame = 0;
 
 const rand = (min, max) => min + Math.random() * (max - min);
+const randInt = (min, max) => Math.floor(rand(min, max + 1));
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distSq = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -221,6 +240,22 @@ function speedUpgradeMultiplier(player) {
 
 function specialUpgradeMultiplier(player) {
   return 1 + (player?.upgrades?.special || 0) * 0.12;
+}
+
+function characterModeSpeedMultiplier(player) {
+  return isBossMode() && player?.character === "nova" ? 1.14 : 1;
+}
+
+function bladeModeRangeMultiplier(player) {
+  return isBossMode() && player?.character === "blade" ? 1.18 : 1;
+}
+
+function isBossMode() {
+  return (state?.difficulty || selectedDifficulty) === "boss";
+}
+
+function randomHealDelay() {
+  return randInt(30, 80);
 }
 
 function maxEnhanceStacks() {
@@ -306,7 +341,7 @@ function activeSkinForCharacter(character, progress = loadProgression()) {
 
 function availableSkinsForCharacter(character, progress = loadProgression()) {
   const skins = [baseSkinForCharacter(character)];
-  for (const mode of ["easy", "hard", "hell"]) {
+  for (const mode of ["easy", "hard", "hell", "boss"]) {
     const skin = skinFor(character, mode);
     if (progress.unlockedSkins.includes(skin.id)) skins.push(skin);
   }
@@ -355,11 +390,15 @@ function totalBossKills(progress = loadProgression()) {
   return Object.values(progress.bossKills).reduce((sum, count) => sum + (Number.isFinite(count) ? count : 0), 0);
 }
 
+function emptyLeaderboard() {
+  return Object.fromEntries(Object.keys(DIFFICULTIES).map((mode) => [mode, []]));
+}
+
 function loadLeaderboard() {
   try {
     const raw = localStorage.getItem(LEADERBOARD_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    const grouped = { easy: [], hard: [], hell: [] };
+    const grouped = emptyLeaderboard();
     const source = Array.isArray(parsed)
       ? parsed
       : Object.values(parsed || {}).flat();
@@ -381,7 +420,7 @@ function loadLeaderboard() {
     }
     return grouped;
   } catch {
-    return { easy: [], hard: [], hell: [] };
+    return emptyLeaderboard();
   }
 }
 
@@ -399,7 +438,7 @@ function resetLeaderboard() {
   try {
     localStorage.removeItem(LEADERBOARD_KEY);
   } catch {
-    storeLeaderboard({ easy: [], hard: [], hell: [] });
+    storeLeaderboard(emptyLeaderboard());
   }
   renderLeaderboard();
 }
@@ -413,7 +452,7 @@ function resetAllProgress() {
     localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem(PROGRESSION_KEY);
   } catch {
-    storeLeaderboard({ easy: [], hard: [], hell: [] });
+    storeLeaderboard(emptyLeaderboard());
     storeProgression(makeDefaultProgression());
   }
   if (!running) state = makeState();
@@ -448,7 +487,9 @@ function saveLeaderboardEntry() {
 function unlockBossSkin(enemy) {
   if (!state || !enemy.isBoss) return null;
   const unlock = SKIN_UNLOCKS[state.difficulty];
-  if (!unlock || enemy.bossWave !== unlock.wave) return null;
+  if (!unlock) return null;
+  const reachedWave = state.difficulty === "boss" ? enemy.bossWave >= unlock.wave : enemy.bossWave === unlock.wave;
+  if (!reachedWave) return null;
   const progress = loadProgression();
   const names = [];
   for (const player of state.players) {
@@ -543,7 +584,12 @@ function difficulty() {
 }
 
 function bossBlockingNextWave() {
+  if (isBossMode()) return state.enemies.some((enemy) => enemy.isBoss && enemy.hp > 0);
   return state.enemies.some((enemy) => enemy.isBoss && enemy.hp > 0 && enemy.hp / enemy.maxHp > 0.15);
+}
+
+function bossGateText() {
+  return isBossMode() ? "击败当前 Boss 后才会进入下一波" : "Boss 血量降到 15% 以下才会进入下一波";
 }
 
 function setDifficulty(mode) {
@@ -665,7 +711,7 @@ function renderGuideProgress() {
     baseItem.append(skinSwatch(base, character), baseText);
     skinsList.append(baseItem);
 
-    for (const mode of ["easy", "hard", "hell"]) {
+    for (const mode of ["easy", "hard", "hell", "boss"]) {
       const unlock = SKIN_UNLOCKS[mode];
       const skin = skinFor(character, mode);
       const item = document.createElement("li");
@@ -796,6 +842,7 @@ function makePlayer(character, index, x, y) {
     invuln: 0,
     spinBurst: 0,
     spinShotTimer: 0,
+    skinAttackCounter: 0,
     facing: -Math.PI / 2,
     dashTrail: [],
     aiThink: 0,
@@ -821,7 +868,7 @@ function makeState() {
     comboTimer: 0,
     time: 0,
     spawnTimer: 0,
-    nextPowerupAt: 60,
+    nextPowerupAt: selectedDifficulty === "boss" ? randomHealDelay() : 60,
     bossWaves: new Set(),
     unlockedSkins: [],
     shake: 0,
@@ -861,6 +908,10 @@ function startGame() {
   ui.start.textContent = "开始游戏";
   ui.pause.textContent = "暂停";
   for (let i = 0; i < difficulty().openingEnemies; i += 1) spawnEnemy();
+  if (isBossMode()) {
+    state.bossWaves.add(1);
+    queueBossWarning(1);
+  }
   updateUi(true);
 }
 
@@ -1002,19 +1053,38 @@ function bossTemplateForWave(wave) {
   return BOSS_TYPES[(Math.floor(wave / 5) - 1) % BOSS_TYPES.length];
 }
 
-function queueBossWarning(wave) {
-  const template = bossTemplateForWave(wave);
-  state.pendingBoss = { wave, timer: 2 };
-  state.bossWarning = { name: template.name, color: template.color, life: 2, maxLife: 2 };
-  state.shake = Math.max(state.shake, 10);
-  addFloater(`${template.name} 信号锁定`, WORLD.w / 2, 112, template.color);
+function bossTemplatesForWave(wave) {
+  if (!isBossMode()) return [bossTemplateForWave(wave)];
+  if (wave <= BOSS_TYPES.length) return [BOSS_TYPES[wave - 1]];
+  return [
+    BOSS_TYPES[Math.floor(rand(0, BOSS_TYPES.length))],
+    BOSS_TYPES[Math.floor(rand(0, BOSS_TYPES.length))],
+  ];
 }
 
-function spawnBoss(wave) {
+function bossModeStatScale(wave) {
+  const step = Math.max(0, wave - 1);
+  return {
+    hp: 1 + step * 0.18,
+    attack: 1 + step * 0.1,
+    radius: Math.min(18, step * 0.35),
+  };
+}
+
+function queueBossWarning(wave) {
+  const templates = bossTemplatesForWave(wave);
+  state.pendingBoss = { wave, templates, timer: 2 };
+  state.bossWarning = { name: templates.map((template) => template.name).join(" / "), color: templates[0].color, life: 2, maxLife: 2 };
+  state.shake = Math.max(state.shake, 10);
+  addFloater(`${state.bossWarning.name} 信号锁定`, WORLD.w / 2, 112, templates[0].color);
+}
+
+function spawnBoss(wave, forcedTemplate = null, slot = 0, total = 1) {
   const tune = difficulty();
-  const template = bossTemplateForWave(wave);
+  const template = forcedTemplate || bossTemplateForWave(wave);
   const bossNumber = Math.floor(wave / 5) - 1;
-  const cycle = Math.floor(bossNumber / BOSS_TYPES.length);
+  const cycle = isBossMode() ? Math.floor((wave - 1) / BOSS_TYPES.length) : Math.floor(bossNumber / BOSS_TYPES.length);
+  const bossModeScale = isBossMode() ? bossModeStatScale(wave) : { hp: 1, attack: 1, radius: 0 };
   const baseSpeeds = {
     bossBlade: 118,
     bossOrbit: 76,
@@ -1024,7 +1094,7 @@ function spawnBoss(wave) {
     bossVoid: 104,
   };
   const p = {
-    x: WORLD.w / 2 + rand(-160, 160),
+    x: WORLD.w / 2 + (slot - (total - 1) / 2) * 240 + rand(-80, 80),
     y: -72,
   };
   const boss = {
@@ -1039,12 +1109,12 @@ function spawnBoss(wave) {
     bossWave: wave,
     bossCycle: cycle,
     bossRank: template.rank,
-    attackScale: (1 + cycle) * duoAttackScale(),
-    r: 42 + template.rank * 3 + Math.min(14, cycle * 3),
-    hp: template.hp * (1 + 1.5 * cycle) * tune.bossHp * duoHpScale(),
+    attackScale: (1 + cycle) * bossModeScale.attack * duoAttackScale(),
+    r: 42 + template.rank * 3 + Math.min(14, cycle * 3) + bossModeScale.radius,
+    hp: template.hp * (1 + 1.5 * cycle) * bossModeScale.hp * tune.bossHp * duoHpScale(),
     maxHp: 1,
     speed: (baseSpeeds[template.type] || 92) * template.speed * tune.bossSpeed,
-    touchDamage: template.touch * (1 + cycle) * duoAttackScale(),
+    touchDamage: template.touch * (1 + cycle) * bossModeScale.attack * duoAttackScale(),
     shootTimer: 1.2,
     pulseTimer: 2.2,
     dashTimer: (template.type === "bossBlade" ? 1.8 : 3) / tune.bossSpeed,
@@ -1399,6 +1469,54 @@ function rewardHits(player, hits, x, y, color, comboStep = 1, energyStep = 0, sp
   addFloater(`+${hits} HIT`, x, y, color);
 }
 
+function hasBossSkin(player) {
+  return (player?.skin?.tier || 0) >= 4;
+}
+
+function bossSkinShotColor(player) {
+  return player?.skin?.attackColor || "#f8fbff";
+}
+
+function releaseBossSkinTechnique(player) {
+  const p = player || state.player;
+  if (!p || p.hp <= 0) return;
+  const template = BOSS_TYPES[Math.floor(rand(0, BOSS_TYPES.length))];
+  const color = bossSkinShotColor(p);
+  const aim = aimAngleFor(p);
+  addFloater(`${template.name} 技能`, p.x, p.y - 64, color);
+  addSparks(p.x, p.y, 30, color, 720);
+  if (template.type === "bossBlade") {
+    const reach = 180;
+    state.slashes.push({ x: p.x, y: p.y, angle: aim, reach, arc: 1.45, life: 0.18, maxLife: 0.18, power: 3, color });
+    for (const enemy of state.enemies) {
+      const d = dist(p, enemy);
+      const diff = Math.atan2(Math.sin(angleTo(p, enemy) - aim), Math.cos(angleTo(p, enemy) - aim));
+      if (d < reach + enemy.r && Math.abs(diff) < 1.45) damageEnemy(enemy, 72, aim, 620, 0.24, color, 0.04);
+    }
+  } else if (template.type === "bossOrbit") {
+    for (let i = 0; i < 8; i += 1) firePlayerShot(p, state.time * 3 + (i / 8) * TAU, { speed: 520, damage: 34, r: 7, color, pierce: 1, glow: true });
+  } else if (template.type === "bossPrism") {
+    for (let i = 0; i < 5; i += 1) firePlayerShot(p, aim - 0.58 + i * 0.29, { speed: 590, damage: 38, r: 6, color, pierce: 1, glow: true });
+  } else if (template.type === "bossWarden") {
+    for (let i = 0; i < 10; i += 1) firePlayerShot(p, (i / 10) * TAU, { speed: 430, damage: 32, r: 8, color, pierce: 2, glow: true });
+    state.shake = Math.max(state.shake, 10);
+  } else if (template.type === "bossLotus") {
+    for (let i = 0; i < 12; i += 1) firePlayerShot(p, state.time * 2 + (i / 12) * TAU, { speed: 470 + (i % 3) * 35, damage: 31, r: 6, color, pierce: 1, glow: true });
+  } else {
+    p.invuln = Math.max(p.invuln, 0.38);
+    for (const spread of [-0.48, -0.2, 0.2, 0.48]) firePlayerShot(p, aim + spread, { speed: 660, damage: 42, r: 8, color, pierce: 2, glow: true });
+  }
+}
+
+function countBossSkinAttack(player, power) {
+  const p = player || state.player;
+  if (power > 1 || !hasBossSkin(p)) return;
+  p.skinAttackCounter = (p.skinAttackCounter || 0) + 1;
+  if (p.skinAttackCounter < 20) return;
+  p.skinAttackCounter = 0;
+  releaseBossSkinTechnique(p);
+}
+
 function attack(player = state.player, power = 1) {
   if (!state || !running) return;
   if (!player || player.hp <= 0) return;
@@ -1415,7 +1533,7 @@ function slash(player = state.player, power = 1) {
   const p = player;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
 
-  const rangeBoost = 1 + p.enhanceStacks * 0.18;
+  const rangeBoost = (1 + p.enhanceStacks * 0.18) * bladeModeRangeMultiplier(p);
   const reach = (power > 1 ? 122 : 92) * rangeBoost;
   const arc = (power > 1 ? 1.58 : 1.18) + p.enhanceStacks * 0.08;
   const damage = (power > 1 ? 96 : 34) * attackUpgradeMultiplier(p);
@@ -1437,6 +1555,7 @@ function slash(player = state.player, power = 1) {
   }
 
   rewardHits(p, hits, p.x + Math.cos(p.facing) * 80, p.y + Math.sin(p.facing) * 80, slashColor, power > 1 ? 2 : 1, 9, power > 1 ? 5 : 9);
+  countBossSkinAttack(p, power);
 }
 
 function firePlayerShot(player, angle, options = {}) {
@@ -1454,6 +1573,7 @@ function firePlayerShot(player, angle, options = {}) {
     color: options.color || p.skin.attackColor || CHARACTERS[p.character].color,
     pierce: options.pierce || 0,
     owner: p,
+    glow: Boolean(options.glow || hasBossSkin(p)),
   });
 }
 
@@ -1483,11 +1603,13 @@ function rangedAttack(player = state.player, power = 1) {
     });
   }
   addSparks(p.x + Math.cos(p.facing) * 26, p.y + Math.sin(p.facing) * 26, 5, shotColor, 360);
+  countBossSkinAttack(p, power);
 }
 
 function pulseAttack(player = state.player, power = 1) {
   const p = player;
-  const cost = 80;
+  const bossModeNormalAttack = power <= 1 && isBossMode();
+  const cost = bossModeNormalAttack ? 50 : 80;
   if (p.slashCooldown > 0 || state.hitStop > 0) return;
   if (p.energy < cost) {
     if (!p.ai) addFloater("能量不足", p.x, p.y - 36, "#ff7aa8");
@@ -1498,7 +1620,7 @@ function pulseAttack(player = state.player, power = 1) {
   p.slashCooldown = power > 1 ? 0.55 : 0.42;
   const radius = power > 1 ? 235 : 170;
   const baseDamage = power > 1 ? 74 : 46;
-  const damage = baseDamage * (1 + p.enhanceStacks * 0.4) * attackUpgradeMultiplier(p);
+  const damage = baseDamage * (bossModeNormalAttack ? 2 : 1) * (1 + p.enhanceStacks * 0.4) * attackUpgradeMultiplier(p);
   const pulseColor = p.skin.attackColor || "#ffca3d";
   state.slashes.push({ x: p.x, y: p.y, angle: 0, reach: radius, arc: Math.PI, life: 0.2, maxLife: 0.2, power: 4, color: pulseColor });
   addSparks(p.x, p.y, 24, pulseColor, 620);
@@ -1512,6 +1634,7 @@ function pulseAttack(player = state.player, power = 1) {
     }
   }
   rewardHits(p, hits, p.x, p.y - 46, pulseColor, 1, 0, 8);
+  countBossSkinAttack(p, power);
 }
 
 function dash(player = state.player) {
@@ -1807,7 +1930,7 @@ function update(dt) {
     p.dashTrail = p.dashTrail.filter((t) => (t.life -= dt) > 0).slice(0, 10);
 
     const move = getMoveVector(p);
-    const speed = (CHARACTERS[p.character] || CHARACTERS.blade).speed * speedUpgradeMultiplier(p);
+    const speed = (CHARACTERS[p.character] || CHARACTERS.blade).speed * speedUpgradeMultiplier(p) * characterModeSpeedMultiplier(p);
     p.vx = lerp(p.vx, move.x * speed, 1 - Math.exp(-dt * 12));
     p.vy = lerp(p.vy, move.y * speed, 1 - Math.exp(-dt * 12));
     p.x = clamp(p.x + p.vx * dt, p.r + 10, WORLD.w - p.r - 10);
@@ -1816,11 +1939,13 @@ function update(dt) {
   }
 
   const tune = difficulty();
-  const targetCount = Math.max(4, Math.floor(Math.min(7 + state.wave * 2, PERF.maxEnemies) * tune.enemyCap));
-  const spawnCadence = Math.max(0.32, 1.05 - state.wave * 0.045) * tune.spawnDelay;
-  if (state.spawnTimer <= 0 && state.enemies.length < targetCount) {
-    spawnEnemy();
-    state.spawnTimer = spawnCadence;
+  if (!isBossMode()) {
+    const targetCount = Math.max(4, Math.floor(Math.min(7 + state.wave * 2, PERF.maxEnemies) * tune.enemyCap));
+    const spawnCadence = Math.max(0.32, 1.05 - state.wave * 0.045) * tune.spawnDelay;
+    if (state.spawnTimer <= 0 && state.enemies.length < targetCount) {
+      spawnEnemy();
+      state.spawnTimer = spawnCadence;
+    }
   }
 
   if (state.time >= state.nextWaveAt) {
@@ -1828,33 +1953,41 @@ function update(dt) {
       state.nextWaveAt = state.time + 1;
       state.bossGateNotice -= dt;
       if (state.bossGateNotice <= 0) {
-        addFloater("Boss 血量降到 15% 以下才会进入下一波", WORLD.w / 2, 118, "#ffca3d");
+        addFloater(bossGateText(), WORLD.w / 2, 118, "#ffca3d");
         state.bossGateNotice = 2.4;
       }
     } else {
-    state.wave += 1;
-    state.nextWaveAt += 22;
-    checkRunAchievements();
-    addFloater(`第 ${state.wave} 波`, WORLD.w / 2, 90, "#18d7ff");
-    const waveBurst = Math.max(1, Math.floor(Math.min(8, 2 + state.wave) * tune.enemyCap));
-    for (let i = 0; i < waveBurst; i += 1) spawnEnemy();
-    if (state.wave % 5 === 0 && !state.bossWaves.has(state.wave)) {
-      state.bossWaves.add(state.wave);
-      queueBossWarning(state.wave);
-    }
+      state.wave += 1;
+      state.nextWaveAt += 22;
+      checkRunAchievements();
+      addFloater(`第 ${state.wave} 波`, WORLD.w / 2, 90, "#18d7ff");
+      if (!isBossMode()) {
+        const waveBurst = Math.max(1, Math.floor(Math.min(8, 2 + state.wave) * tune.enemyCap));
+        for (let i = 0; i < waveBurst; i += 1) spawnEnemy();
+      }
+      if ((isBossMode() || state.wave % 5 === 0) && !state.bossWaves.has(state.wave)) {
+        state.bossWaves.add(state.wave);
+        queueBossWarning(state.wave);
+      }
     }
   }
 
   if (state.time >= state.nextPowerupAt) {
-    spawnPowerup();
-    state.nextPowerupAt += 120;
+    if (isBossMode()) {
+      spawnHealPowerup(rand(90, WORLD.w - 90), rand(90, WORLD.h - 90));
+      state.nextPowerupAt += randomHealDelay();
+    } else {
+      spawnPowerup();
+      state.nextPowerupAt += 120;
+    }
   }
 
   if (state.pendingBoss) {
     state.pendingBoss.timer -= dt;
     if (state.bossWarning) state.bossWarning.life = Math.max(0, state.pendingBoss.timer);
     if (state.pendingBoss.timer <= 0) {
-      spawnBoss(state.pendingBoss.wave);
+      const templates = state.pendingBoss.templates || [bossTemplateForWave(state.pendingBoss.wave)];
+      templates.forEach((template, index) => spawnBoss(state.pendingBoss.wave, template, index, templates.length));
       state.pendingBoss = null;
       state.bossWarning = null;
     }
@@ -2159,6 +2292,36 @@ function drawPlayer(p) {
     ctx.restore();
   }
 
+  if (skinTier >= 4) {
+    const crownPulse = 0.75 + Math.sin(state.time * 11) * 0.18;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = skin.attackColor || "#f8fbff";
+    ctx.fillStyle = skin.attackColor || "#f8fbff";
+    ctx.shadowBlur = 34;
+    ctx.shadowColor = skin.attackColor || "#f8fbff";
+    ctx.globalAlpha = 0.46 * crownPulse;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(-4, 0, 45, -0.9, 0.9);
+    ctx.stroke();
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-18, side * 15);
+      ctx.lineTo(-53, side * 30);
+      ctx.lineTo(-30, side * 4);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 0.82;
+    ctx.beginPath();
+    ctx.moveTo(18, -18);
+    ctx.lineTo(33, 0);
+    ctx.lineTo(18, 18);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.fillStyle = p.invuln > 0 && Math.floor(state.time * 24) % 2 === 0 ? "#ffca3d" : "#f8fbff";
   ctx.beginPath();
   ctx.moveTo(skinTier >= 3 ? 29 : 25, 0);
@@ -2449,8 +2612,17 @@ function drawParticles() {
   for (const shot of state.playerShots) {
     const alpha = clamp(shot.life / 1.2, 0.18, 1);
     ctx.globalAlpha = alpha;
+    if (shot.glow) {
+      ctx.strokeStyle = shot.color;
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 28;
+      ctx.shadowColor = shot.color;
+      ctx.beginPath();
+      ctx.arc(shot.x, shot.y, shot.r * 2.4, 0, TAU);
+      ctx.stroke();
+    }
     ctx.fillStyle = shot.color;
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = shot.glow ? 28 : 16;
     ctx.shadowColor = shot.color;
     ctx.beginPath();
     ctx.arc(shot.x, shot.y, shot.r, 0, TAU);

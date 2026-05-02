@@ -268,9 +268,12 @@ canvas {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.difficulty,
 .characters {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.difficulty {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .difficulty {
@@ -425,6 +428,19 @@ canvas {
     inset 0 0 0 1px color-mix(in srgb, var(--skin-color), white 20%);
 }
 
+.skin-swatch.tier-4 {
+  border-color: #f8fbff;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #f8fbff 0 8%, transparent 9%),
+    conic-gradient(from 30deg, var(--attack-color), #f8fbff, var(--skin-color), var(--attack-color), #ffca3d, var(--attack-color)),
+    radial-gradient(circle, color-mix(in srgb, var(--skin-color), transparent 18%), transparent 68%);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--attack-color), transparent 12%),
+    0 0 8px #f8fbff,
+    inset 0 0 0 2px #f8fbff;
+}
+
 .skin-swatch::before {
   content: "";
   position: absolute;
@@ -452,6 +468,18 @@ canvas {
   filter:
     drop-shadow(0 0 5px #f8fbff)
     drop-shadow(0 0 7px color-mix(in srgb, var(--attack-color), transparent 10%));
+}
+
+.skin-swatch.tier-4::before {
+  left: 4px;
+  top: 4px;
+  width: 24px;
+  height: 22px;
+  clip-path: polygon(100% 50%, 18% 0, 42% 30%, 0 6%, 24% 50%, 0 94%, 42% 70%, 18% 100%);
+  background: #f8fbff;
+  filter:
+    drop-shadow(0 0 5px #f8fbff)
+    drop-shadow(0 0 11px var(--attack-color));
 }
 
 .skin-swatch::after {
@@ -487,6 +515,13 @@ canvas {
   box-shadow:
     0 0 10px var(--attack-color),
     -10px 0 0 color-mix(in srgb, var(--skin-color), transparent 22%);
+}
+
+.skin-swatch.tier-4::after {
+  background: #041018;
+  box-shadow:
+    0 0 0 4px var(--attack-color),
+    0 0 16px 7px color-mix(in srgb, var(--attack-color), transparent 34%);
 }
 
 .skin-swatch.locked {
@@ -954,7 +989,7 @@ canvas {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1181,9 +1216,8 @@ canvas {
     font-size: 11px;
   }
 
-  .mode-select,
   .difficulty {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .mode-select {
@@ -1216,7 +1250,7 @@ canvas {
   }
 
   .leaderboard-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 5px;
   }
 
