@@ -1,0 +1,11 @@
+{
+  "starting_money": 1800,
+  "start_bonus": 200,
+  "max_rounds": 30,
+  "default_players": [
+    { "name": "玩家一", "color": "#E84A5F", "is_ai": false },
+    { "name": "玩家二", "color": "#2A9D8F", "is_ai": false },
+    { "name": "玩家三", "color": "#F4A261", "is_ai": true },
+    { "name": "玩家四", "color": "#577590", "is_ai": true }
+  ]
+}

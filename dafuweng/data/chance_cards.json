@@ -1,0 +1,84 @@
+[
+  {
+    "id": 1,
+    "title": "城市分红",
+    "description": "你获得 200 元。",
+    "effect": "ADD_MONEY",
+    "amount": 200
+  },
+  {
+    "id": 2,
+    "title": "维修账单",
+    "description": "你支付 120 元。",
+    "effect": "REMOVE_MONEY",
+    "amount": 120
+  },
+  {
+    "id": 3,
+    "title": "快速通勤",
+    "description": "前进 5 格。",
+    "effect": "MOVE_RELATIVE",
+    "steps": 5
+  },
+  {
+    "id": 4,
+    "title": "绕路施工",
+    "description": "后退 3 格。",
+    "effect": "MOVE_RELATIVE",
+    "steps": -3
+  },
+  {
+    "id": 5,
+    "title": "回到起点",
+    "description": "移动到起点，并获得起点奖励。",
+    "effect": "MOVE_TO",
+    "target_tile": 0,
+    "grant_start_bonus": true
+  },
+  {
+    "id": 6,
+    "title": "邻里赞助",
+    "description": "所有其他玩家给你 50 元。",
+    "effect": "COLLECT_FROM_ALL",
+    "amount": 50
+  },
+  {
+    "id": 7,
+    "title": "社区基金",
+    "description": "你给每位其他玩家 50 元。",
+    "effect": "PAY_ALL",
+    "amount": 50
+  },
+  {
+    "id": 8,
+    "title": "投资返利",
+    "description": "获得地产维修补贴 150 元。",
+    "effect": "ADD_MONEY",
+    "amount": 150
+  },
+  {
+    "id": 9,
+    "title": "误工罚款",
+    "description": "支付 150 元。",
+    "effect": "REMOVE_MONEY",
+    "amount": 150
+  },
+  {
+    "id": 10,
+    "title": "换乘专线",
+    "description": "随机传送到一个格子。",
+    "effect": "MOVE_RANDOM"
+  },
+  {
+    "id": 11,
+    "title": "拆迁令",
+    "description": "随机摧毁其他玩家一处已升级房产 1 个等级。",
+    "effect": "DEMOLISH_OPPONENT"
+  },
+  {
+    "id": 12,
+    "title": "装修补贴",
+    "description": "随机将自己一处未满级房产免费升级 1 级。",
+    "effect": "UPGRADE_SELF"
+  }
+]
